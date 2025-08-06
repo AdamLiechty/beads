@@ -160,7 +160,7 @@ function App() {
   }
 
   // Draw bead markers and bracelet curve on overlay
-  const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null) => {
+  const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null) => {
     const overlayCanvas = overlayCanvasRef.current
     if (!overlayCanvas) return
 
@@ -182,6 +182,45 @@ function App() {
 
     const ctx = overlayCanvas.getContext('2d')
     ctx.clearRect(0, 0, displayRect.width, displayRect.height)
+
+    // Draw density mask as translucent overlay if available
+    if (densityMask) {
+      const imageData = ctx.createImageData(displayRect.width, displayRect.height)
+      
+      for (let y = 0; y < displayRect.height; y++) {
+        for (let x = 0; x < displayRect.width; x++) {
+          const idx = (y * displayRect.width + x) * 4
+          
+          // Map display coordinates back to original image coordinates
+          const origX = Math.floor(x / scaleX)
+          const origY = Math.floor(y / scaleY)
+          
+          if (origX >= 0 && origX < imageWidth && origY >= 0 && origY < imageHeight) {
+            const densityValue = densityMask.ucharPtr(origY, origX)[0]
+            
+            // Create a red translucent overlay for white regions
+            if (densityValue > 127) {
+              imageData.data[idx] = 255     // Red
+              imageData.data[idx + 1] = 0   // Green
+              imageData.data[idx + 2] = 0   // Blue
+              imageData.data[idx + 3] = 80  // Alpha (translucent)
+            } else {
+              imageData.data[idx] = 0
+              imageData.data[idx + 1] = 0
+              imageData.data[idx + 2] = 0
+              imageData.data[idx + 3] = 0
+            }
+          } else {
+            imageData.data[idx] = 0
+            imageData.data[idx + 1] = 0
+            imageData.data[idx + 2] = 0
+            imageData.data[idx + 3] = 0
+          }
+        }
+      }
+      
+      ctx.putImageData(imageData, 0, 0)
+    }
 
     // Draw a test line to verify canvas is working
     ctx.strokeStyle = '#FF0000'
@@ -585,6 +624,9 @@ function App() {
       setBraceletCurve(braceletCurve)
       console.log(`Bracelet curve stored for visualization: ${braceletCurve ? braceletCurve.length : 0} points`)
       
+      // Clone the density mask before cleanup
+      const densityMaskClone = finalDensityMask.clone()
+      
       // Clean up OpenCV objects
       src.delete()
       gray.delete()
@@ -604,11 +646,11 @@ function App() {
       braceletContourVector.delete()
       
       console.log(`Found ${beads.length} beads along the bracelet curve`)
-      return beads
+      return { beads, densityMask: densityMaskClone }
       
     } catch (error) {
       console.error('Error in OpenCV detection:', error)
-      return []
+      return { beads: [], densityMask: null }
     }
   }
 
@@ -1000,7 +1042,9 @@ function App() {
     console.log(`Processing image: ${width}x${height}`)
 
     // Use OpenCV-based detection
-    const detectedBeads = detectBeadsWithOpenCV(data, width, height)
+    const result = detectBeadsWithOpenCV(data, width, height)
+    const detectedBeads = result.beads
+    const densityMask = result.densityMask
     console.log(`Beads found: ${detectedBeads.length}`)
 
     // Sort beads along the bracelet curve path
@@ -1055,7 +1099,12 @@ function App() {
     setDetectedBeads(uniqueBeads)
     
     // Draw markers on overlay
-    drawBeadMarkers(uniqueBeads, width, height, braceletCurve)
+    drawBeadMarkers(uniqueBeads, width, height, braceletCurve, densityMask)
+    
+    // Clean up the density mask after drawing
+    if (densityMask) {
+      densityMask.delete()
+    }
   }
 
   // Continuous detection
