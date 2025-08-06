@@ -329,11 +329,49 @@ function App() {
       const edges = new cv.Mat()
       cv.Canny(blurred, edges, 30, 100) // Lower thresholds for more edges
       
+      // Apply aggressive morphological operations to connect edge fragments
+      const largeKernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(25, 25))
+      const connectedEdges = new cv.Mat()
+      cv.morphologyEx(edges, connectedEdges, cv.MORPH_CLOSE, largeKernel)
+      
+      // Apply another pass with even larger kernel
+      const hugeKernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(35, 35))
+      cv.morphologyEx(connectedEdges, connectedEdges, cv.MORPH_CLOSE, hugeKernel)
+      
       // Try different density thresholds to find a valid bracelet loop
-      for (let densityThreshold = 5; densityThreshold <= 50; densityThreshold += 5) {
-        // Create a density map by applying Gaussian blur to the edges
+      for (let densityThreshold = 10; densityThreshold <= 100; densityThreshold += 10) {
+        // Debug: save density map for key thresholds
+        if (densityThreshold === 10 || densityThreshold === 20 || densityThreshold === 30) {
+          const debugDensityMap = new cv.Mat()
+          // Use connected edges for density map
+          cv.GaussianBlur(connectedEdges, debugDensityMap, new cv.Size(21, 21), 0)
+          
+          const debugCanvas = document.createElement('canvas')
+          debugCanvas.width = width
+          debugCanvas.height = height
+          const debugCtx = debugCanvas.getContext('2d')
+          const debugImageData = debugCtx.createImageData(width, height)
+          
+          // Convert OpenCV Mat to ImageData
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const idx = (y * width + x) * 4
+              const densityValue = debugDensityMap.ucharPtr(y, x)[0]
+              debugImageData.data[idx] = densityValue
+              debugImageData.data[idx + 1] = densityValue
+              debugImageData.data[idx + 2] = densityValue
+              debugImageData.data[idx + 3] = 255
+            }
+          }
+          
+          debugCtx.putImageData(debugImageData, 0, 0)
+          console.log(`Density map (threshold ${densityThreshold}):`, debugCanvas.toDataURL())
+          
+          debugDensityMap.delete()
+        }
+        // Create a density map from connected edges
         const densityMap = new cv.Mat()
-        cv.GaussianBlur(edges, densityMap, new cv.Size(21, 21), 0) // Larger blur for better density
+        cv.GaussianBlur(connectedEdges, densityMap, new cv.Size(21, 21), 0)
         
         // Threshold the density map
         const densityMask = new cv.Mat()
@@ -413,7 +451,7 @@ function App() {
       
       // Use the best density threshold result for the final processing
       const finalDensityMap = new cv.Mat()
-      cv.GaussianBlur(edges, finalDensityMap, new cv.Size(21, 21), 0)
+      cv.GaussianBlur(connectedEdges, finalDensityMap, new cv.Size(21, 21), 0)
       
       const finalDensityMask = new cv.Mat()
       cv.threshold(finalDensityMap, finalDensityMask, bestDensityThreshold, 255, cv.THRESH_BINARY)
@@ -421,6 +459,28 @@ function App() {
       const finalKernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(11, 11))
       const finalMorph = new cv.Mat()
       cv.morphologyEx(finalDensityMask, finalMorph, cv.MORPH_CLOSE, finalKernel)
+      
+      // Debug: save final results
+      const finalCanvas = document.createElement('canvas')
+      finalCanvas.width = width
+      finalCanvas.height = height
+      const finalCtx = finalCanvas.getContext('2d')
+      const finalImageData = finalCtx.createImageData(width, height)
+      
+      // Convert final morph result to ImageData
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4
+          const morphValue = finalMorph.ucharPtr(y, x)[0]
+          finalImageData.data[idx] = morphValue
+          finalImageData.data[idx + 1] = morphValue
+          finalImageData.data[idx + 2] = morphValue
+          finalImageData.data[idx + 3] = 255
+        }
+      }
+      
+      finalCtx.putImageData(finalImageData, 0, 0)
+      console.log(`Final result (threshold ${bestDensityThreshold}):`, finalCanvas.toDataURL())
       
       binary = finalMorph.clone()
       
@@ -500,6 +560,9 @@ function App() {
       binary.delete()
       blurred.delete()
       edges.delete()
+      largeKernel.delete()
+      hugeKernel.delete()
+      connectedEdges.delete()
       finalDensityMap.delete()
       finalDensityMask.delete()
       finalMorph.delete()
