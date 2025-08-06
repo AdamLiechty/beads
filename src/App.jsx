@@ -17,6 +17,7 @@ function App() {
   const [isTestMode, setIsTestMode] = useState(false)
   const [debugInfo, setDebugInfo] = useState('')
   const [opencvReady, setOpencvReady] = useState(false)
+  const [braceletCurve, setBraceletCurve] = useState(null)
 
   // Load OpenCV for browser (prevent duplicate loading)
   useEffect(() => {
@@ -133,6 +134,7 @@ function App() {
       setIsCameraActive(false)
       setDetectedBeads([])
       setDebugInfo('')
+      setBraceletCurve(null)
       clearOverlay()
       return
     }
@@ -143,6 +145,7 @@ function App() {
       setIsCameraActive(false)
       setDetectedBeads([])
       setDebugInfo('')
+      setBraceletCurve(null)
       clearOverlay()
     }
   }
@@ -156,8 +159,8 @@ function App() {
     }
   }
 
-  // Draw bead markers on overlay
-  const drawBeadMarkers = (beads, imageWidth, imageHeight) => {
+  // Draw bead markers and bracelet curve on overlay
+  const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null) => {
     const overlayCanvas = overlayCanvasRef.current
     if (!overlayCanvas) return
 
@@ -179,6 +182,73 @@ function App() {
 
     const ctx = overlayCanvas.getContext('2d')
     ctx.clearRect(0, 0, displayRect.width, displayRect.height)
+
+    // Draw a test line to verify canvas is working
+    ctx.strokeStyle = '#FF0000'
+    ctx.lineWidth = 5
+    ctx.beginPath()
+    ctx.moveTo(10, 10)
+    ctx.lineTo(100, 100)
+    ctx.stroke()
+
+    // Draw bracelet curve if available
+    if (braceletCurve && braceletCurve.length > 0) {
+      console.log(`Drawing bracelet curve with ${braceletCurve.length} points`)
+      console.log(`Scale factors: scaleX=${scaleX}, scaleY=${scaleY}`)
+      console.log(`Display dimensions: ${displayRect.width}x${displayRect.height}`)
+      console.log(`Image dimensions: ${imageWidth}x${imageHeight}`)
+      
+      // Log first few points to debug
+      for (let i = 0; i < Math.min(5, braceletCurve.length); i++) {
+        const point = braceletCurve[i]
+        console.log(`Point ${i}: (${point.x}, ${point.y}) -> (${point.x * scaleX}, ${point.y * scaleY})`)
+        console.log(`Point ${i} types: x=${typeof point.x}, y=${typeof point.y}`)
+        console.log(`Point ${i} valid: x=${!isNaN(point.x)}, y=${!isNaN(point.y)}`)
+      }
+      
+      ctx.strokeStyle = '#4CAF50'
+      ctx.lineWidth = 3 // Make it thicker
+      ctx.setLineDash([5, 5])
+      ctx.beginPath()
+      
+      for (let i = 0; i < braceletCurve.length; i++) {
+        const point = braceletCurve[i]
+        const x = point.x * scaleX
+        const y = point.y * scaleY
+        
+        if (i === 0) {
+          ctx.moveTo(x, y)
+        } else {
+          ctx.lineTo(x, y)
+        }
+      }
+      
+      // Close the curve
+      if (braceletCurve.length > 0) {
+        const firstPoint = braceletCurve[0]
+        const x = firstPoint.x * scaleX
+        const y = firstPoint.y * scaleY
+        ctx.lineTo(x, y)
+      }
+      
+      ctx.stroke()
+      ctx.setLineDash([]) // Reset line dash
+      
+      // Draw circles at each point to debug positioning
+      ctx.fillStyle = '#00FF00'
+      for (let i = 0; i < braceletCurve.length; i++) {
+        const point = braceletCurve[i]
+        const x = point.x * scaleX
+        const y = point.y * scaleY
+        ctx.beginPath()
+        ctx.arc(x, y, 3, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+      
+      console.log('Bracelet curve drawn')
+    } else {
+      console.log('No bracelet curve to draw')
+    }
 
     beads.forEach((bead, index) => {
       // Scale the coordinates to match the displayed image
@@ -226,7 +296,7 @@ function App() {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`
   }
 
-  // OpenCV-based bead detection
+  // OpenCV-based bead string detection with curve fitting
   const detectBeadsWithOpenCV = (data, width, height) => {
     if (!window.cv || !opencvLoaded) {
       console.log('OpenCV not loaded yet')
@@ -239,97 +309,441 @@ function App() {
       // Create OpenCV Mat from image data
       const src = cv.matFromImageData({ data, width, height })
       const gray = new cv.Mat()
-      const circles = new cv.Mat()
+      let binary = new cv.Mat()
       
       // Convert to grayscale
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY)
       
       // Apply Gaussian blur to reduce noise
       const blurred = new cv.Mat()
-      cv.GaussianBlur(gray, blurred, new cv.Size(9, 9), 2, 2)
+      cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0)
       
-      // Detect circles using Hough Circle Transform
-      cv.HoughCircles(
-        blurred,
-        circles,
-        cv.HOUGH_GRADIENT,
-        1, // dp
-        blurred.rows / 8, // minDist
-        100, // param1 (edge detection threshold)
-        30, // param2 (accumulator threshold)
-        Math.min(width, height) * 0.02, // minRadius (2% of smaller dimension)
-        Math.min(width, height) * 0.06  // maxRadius (6% of smaller dimension)
-      )
+      // Use improved edge density approach
+      const imageCenterX = width / 2
+      const imageCenterY = height / 2
+      let bestBraceletContour = null
+      let bestScore = 0
+      let bestDensityThreshold = 0
       
-      const beads = []
+      // Use Canny edge detection to find edges
+      const edges = new cv.Mat()
+      cv.Canny(blurred, edges, 30, 100) // Lower thresholds for more edges
       
-      // Process detected circles
-      for (let i = 0; i < circles.cols; i++) {
-        const x = circles.data32F[i * 3]
-        const y = circles.data32F[i * 3 + 1]
-        const radius = circles.data32F[i * 3 + 2]
+      // Try different density thresholds to find a valid bracelet loop
+      for (let densityThreshold = 5; densityThreshold <= 50; densityThreshold += 5) {
+        // Create a density map by applying Gaussian blur to the edges
+        const densityMap = new cv.Mat()
+        cv.GaussianBlur(edges, densityMap, new cv.Size(21, 21), 0) // Larger blur for better density
         
-        // Extract color from the center of the circle
-        const centerX = Math.round(x)
-        const centerY = Math.round(y)
+        // Threshold the density map
+        const densityMask = new cv.Mat()
+        cv.threshold(densityMap, densityMask, densityThreshold, 255, cv.THRESH_BINARY)
         
-        if (centerX >= 0 && centerX < width && centerY >= 0 && centerY < height) {
-          const idx = (centerY * width + centerX) * 4
-          const r = data[idx]
-          const g = data[idx + 1]
-          const b = data[idx + 2]
+        // Use morphological operations to connect nearby high-density areas
+        const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(11, 11))
+        const morph = new cv.Mat()
+        cv.morphologyEx(densityMask, morph, cv.MORPH_CLOSE, kernel)
+        
+        // Find contours for this density threshold
+        const testContours = new cv.MatVector()
+        const testHierarchy = new cv.Mat()
+        cv.findContours(
+          morph,
+          testContours,
+          testHierarchy,
+          cv.RETR_EXTERNAL,
+          cv.CHAIN_APPROX_SIMPLE
+        )
+        
+        // Evaluate contours for this density threshold
+        for (let i = 0; i < testContours.size(); i++) {
+          const contour = testContours.get(i)
+          const area = cv.contourArea(contour)
           
-          // Get average color from the circle region
-          let totalR = 0, totalG = 0, totalB = 0, count = 0
-          const sampleRadius = Math.min(radius * 0.7, 20) // Sample 70% of radius, max 20px
+          // Filter by size
+          const minArea = Math.min(width, height) * 0.08
+          const maxArea = Math.min(width, height) * 0.9
           
-          for (let dy = -sampleRadius; dy <= sampleRadius; dy++) {
-            for (let dx = -sampleRadius; dx <= sampleRadius; dx++) {
-              const nx = centerX + dx
-              const ny = centerY + dy
-              const dist = Math.sqrt(dx * dx + dy * dy)
-              
-              if (dist <= sampleRadius && nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                const pixelIdx = (ny * width + nx) * 4
-                totalR += data[pixelIdx]
-                totalG += data[pixelIdx + 1]
-                totalB += data[pixelIdx + 2]
-                count++
-              }
-            }
+          if (area < minArea || area > maxArea) {
+            continue
           }
           
-          if (count > 0) {
-            const avgR = Math.round(totalR / count)
-            const avgG = Math.round(totalG / count)
-            const avgB = Math.round(totalB / count)
-            
-            beads.push({
-              centerX: x,
-              centerY: y,
-              radius: radius,
-              color: [avgR, avgG, avgB],
-              hex: rgbToHex(avgR, avgG, avgB),
-              region: Math.PI * radius * radius,
-              circularity: 1.0 // Perfect circle from Hough transform
-            })
+          // Check if the contour encircles the center
+          const centerInside = cv.pointPolygonTest(contour, new cv.Point(imageCenterX, imageCenterY), false) >= 0
+          
+          if (!centerInside) {
+            continue
+          }
+          
+          // Calculate scoring
+          const boundingRect = cv.boundingRect(contour)
+          const aspectRatio = boundingRect.width / boundingRect.height
+          const perimeter = cv.arcLength(contour, true)
+          const circularity = (4 * Math.PI * area) / (perimeter * perimeter)
+          
+          const areaScore = Math.min(area / (Math.min(width, height) * 0.4), 1)
+          const circularityScore = circularity
+          const aspectRatioScore = 1 - Math.abs(1 - aspectRatio)
+          
+          const totalScore = areaScore * 0.5 + circularityScore * 0.3 + aspectRatioScore * 0.2
+          
+          if (totalScore > bestScore) {
+            bestScore = totalScore
+            bestBraceletContour = contour.clone()
+            bestDensityThreshold = densityThreshold
+            console.log(`Better contour found: density=${densityThreshold}, score=${totalScore.toFixed(3)}, area=${area.toFixed(0)}`)
           }
         }
+        
+        // Clean up test objects
+        densityMap.delete()
+        densityMask.delete()
+        morph.delete()
+        kernel.delete()
+        testContours.delete()
+        testHierarchy.delete()
       }
+      
+      console.log(`Best density threshold found: ${bestDensityThreshold} with score: ${bestScore.toFixed(3)}`)
+      
+      if (!bestBraceletContour) {
+        console.log('No suitable bracelet contour found with any density threshold')
+        return []
+      }
+      
+      // Use the best density threshold result for the final processing
+      const finalDensityMap = new cv.Mat()
+      cv.GaussianBlur(edges, finalDensityMap, new cv.Size(21, 21), 0)
+      
+      const finalDensityMask = new cv.Mat()
+      cv.threshold(finalDensityMap, finalDensityMask, bestDensityThreshold, 255, cv.THRESH_BINARY)
+      
+      const finalKernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(11, 11))
+      const finalMorph = new cv.Mat()
+      cv.morphologyEx(finalDensityMask, finalMorph, cv.MORPH_CLOSE, finalKernel)
+      
+      binary = finalMorph.clone()
+      
+      // Use the best bracelet contour found from dynamic color thresholding
+      
+      // Debug: save color segmentation result to canvas for visualization
+      const segCanvas = document.createElement('canvas')
+      segCanvas.width = width
+      segCanvas.height = height
+      const segCtx = segCanvas.getContext('2d')
+      const segImageData = segCtx.createImageData(width, height)
+      
+      // Convert OpenCV Mat to ImageData
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4
+          const segValue = cleanedMask.ucharPtr(y, x)[0]
+          segImageData.data[idx] = segValue
+          segImageData.data[idx + 1] = segValue
+          segImageData.data[idx + 2] = segValue
+          segImageData.data[idx + 3] = 255
+        }
+      }
+      
+      segCtx.putImageData(segImageData, 0, 0)
+      console.log('Color segmentation result:', segCanvas.toDataURL())
+      
+      // Find contours
+      const contours = new cv.MatVector()
+      const hierarchy = new cv.Mat()
+      cv.findContours(
+        binary,
+        contours,
+        hierarchy,
+        cv.RETR_EXTERNAL,
+        cv.CHAIN_APPROX_SIMPLE
+      )
+      
+      console.log(`Found ${contours.size()} total contours`)
+      
+      // Debug: log all contours with their areas
+      for (let i = 0; i < Math.min(20, contours.size()); i++) {
+        const contour = contours.get(i)
+        const area = cv.contourArea(contour)
+        const boundingRect = cv.boundingRect(contour)
+        console.log(`Contour ${i}: area=${area.toFixed(0)}, bounds=(${boundingRect.x},${boundingRect.y},${boundingRect.width}x${boundingRect.height})`)
+      }
+      
+      // Use the best bracelet contour found from dynamic thresholding
+      if (!bestBraceletContour) {
+        console.log('No suitable bracelet contour found')
+        return []
+      }
+      
+      console.log(`Best bracelet contour score: ${bestScore.toFixed(3)}`)
+      
+      // Create a mask for the bracelet area
+      const braceletMask = new cv.Mat.zeros(height, width, cv.CV_8UC1)
+      const braceletContourVector = new cv.MatVector()
+      braceletContourVector.push_back(bestBraceletContour)
+      cv.drawContours(braceletMask, braceletContourVector, 0, new cv.Scalar(255), -1)
+      
+      // Find the bracelet curve path
+      const braceletCurve = extractBraceletCurve(bestBraceletContour, width, height)
+      console.log(`Bracelet curve extracted: ${braceletCurve ? braceletCurve.length : 0} points`)
+      
+      // Find beads along the bracelet curve
+      const beads = findBeadsAlongCurve(data, width, height, braceletMask, braceletCurve)
+      
+      // Store bracelet curve for visualization
+      setBraceletCurve(braceletCurve)
+      console.log(`Bracelet curve stored for visualization: ${braceletCurve ? braceletCurve.length : 0} points`)
       
       // Clean up OpenCV objects
       src.delete()
       gray.delete()
-      circles.delete()
+      binary.delete()
       blurred.delete()
+      edges.delete()
+      finalDensityMap.delete()
+      finalDensityMask.delete()
+      finalMorph.delete()
+      finalKernel.delete()
+      contours.delete()
+      hierarchy.delete()
+      braceletMask.delete()
+      braceletContourVector.delete()
       
-      console.log(`OpenCV detected ${beads.length} circles`)
+      console.log(`Found ${beads.length} beads along the bracelet curve`)
       return beads
       
     } catch (error) {
       console.error('Error in OpenCV detection:', error)
       return []
     }
+  }
+
+  // Extract the bracelet curve path
+  const extractBraceletCurve = (contour, width, height) => {
+    const cv = window.cv
+    
+    // Get contour points - OpenCV contours are stored as 32-bit integers
+    const points = []
+    for (let i = 0; i < contour.rows; i++) {
+      const x = contour.data32S[i * 2]
+      const y = contour.data32S[i * 2 + 1]
+      points.push({ x, y })
+    }
+    
+    console.log(`Extracted ${points.length} points from contour`)
+    
+    // Sort points by angle from center to create a continuous curve
+    const centerX = width / 2
+    const centerY = height / 2
+    
+    points.sort((a, b) => {
+      const angleA = Math.atan2(a.y - centerY, a.x - centerX)
+      const angleB = Math.atan2(b.y - centerY, b.x - centerX)
+      return angleA - angleB
+    })
+    
+    // Remove duplicate points and smooth the curve
+    const uniquePoints = []
+    for (let i = 0; i < points.length; i++) {
+      if (i === 0 || 
+          Math.abs(points[i].x - points[i-1].x) > 2 || 
+          Math.abs(points[i].y - points[i-1].y) > 2) {
+        uniquePoints.push(points[i])
+      }
+    }
+    
+    console.log(`Curve has ${uniquePoints.length} unique points`)
+    return uniquePoints
+  }
+
+  // Find beads along the bracelet curve
+  const findBeadsAlongCurve = (data, width, height, braceletMask, curvePoints) => {
+    const cv = window.cv
+    const beads = []
+    
+    // Create a binary image for bead detection
+    const gray = new cv.Mat(height, width, cv.CV_8UC1)
+    const binary = new cv.Mat()
+    
+    // Convert RGBA to grayscale
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4
+        const r = data[idx]
+        const g = data[idx + 1]
+        const b = data[idx + 2]
+        const grayValue = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
+        gray.ucharPtr(y, x)[0] = grayValue
+      }
+    }
+    
+    // Apply Gaussian blur
+    const blurred = new cv.Mat()
+    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0)
+    
+    // Use adaptive thresholding
+    cv.adaptiveThreshold(
+      blurred,
+      binary,
+      255,
+      cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+      cv.THRESH_BINARY_INV,
+      11,
+      2
+    )
+    
+    // Find contours within the bracelet area
+    const contours = new cv.MatVector()
+    const hierarchy = new cv.Mat()
+    cv.findContours(
+      binary,
+      contours,
+      hierarchy,
+      cv.RETR_EXTERNAL,
+      cv.CHAIN_APPROX_SIMPLE
+    )
+    
+    console.log(`Found ${contours.size()} potential bead contours`)
+    
+    // Process each potential bead contour
+    for (let i = 0; i < contours.size(); i++) {
+      const contour = contours.get(i)
+      
+      // Calculate contour properties
+      const area = cv.contourArea(contour)
+      const perimeter = cv.arcLength(contour, true)
+      
+      // Filter by size - use actual pixel areas
+      const minArea = 20  // Minimum 20 pixels
+      const maxArea = 1000 // Maximum 1000 pixels
+      
+      if (area < minArea || area > maxArea) {
+        console.log(`Contour ${i} rejected by size: area=${area.toFixed(0)}, min=${minArea.toFixed(0)}, max=${maxArea.toFixed(0)}`)
+        continue
+      }
+      
+      // Calculate circularity
+      const circularity = (4 * Math.PI * area) / (perimeter * perimeter)
+      if (circularity < 0.1) { // More permissive circularity
+        console.log(`Contour ${i} rejected by circularity: ${circularity.toFixed(3)}`)
+        continue
+      }
+      
+      // Get center
+      const moments = cv.moments(contour)
+      if (moments.m00 === 0) continue
+      
+      const centerX = moments.m10 / moments.m00
+      const centerY = moments.m01 / moments.m00
+      
+      if (isNaN(centerX) || isNaN(centerY)) continue
+      
+      // Check if center is within bracelet mask
+      const centerPixelX = Math.round(centerX)
+      const centerPixelY = Math.round(centerY)
+      
+      if (centerPixelX < 0 || centerPixelX >= width || centerPixelY < 0 || centerPixelY >= height) {
+        continue
+      }
+      
+      const maskValue = braceletMask.ucharPtr(centerPixelY, centerPixelX)[0]
+      if (maskValue === 0) {
+        continue
+      }
+      
+      // Check if bead is close to the bracelet curve
+      const distanceToCurve = getDistanceToCurve(centerX, centerY, curvePoints)
+      const maxDistance = Math.min(width, height) * 0.1 // 10% of smaller dimension (more permissive)
+      
+      if (distanceToCurve > maxDistance) {
+        console.log(`Contour ${i} rejected by distance to curve: ${distanceToCurve.toFixed(1)} > ${maxDistance.toFixed(1)}`)
+        continue
+      }
+      
+      // Calculate radius
+      const radius = Math.sqrt(area / Math.PI)
+      
+      // Sample color from bead center
+      const color = sampleBeadColor(data, width, height, centerX, centerY, radius)
+      if (!color) {
+        console.log(`Contour ${i} rejected by color sampling`)
+        continue
+      }
+      
+      console.log(`Bead found at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}) with color (${color[0]}, ${color[1]}, ${color[2]})`)
+      
+      beads.push({
+        centerX: centerX,
+        centerY: centerY,
+        radius: radius,
+        color: color,
+        hex: rgbToHex(color[0], color[1], color[2]),
+        distanceToCurve: distanceToCurve,
+        circularity: circularity
+      })
+    }
+    
+    // Clean up
+    gray.delete()
+    binary.delete()
+    blurred.delete()
+    contours.delete()
+    hierarchy.delete()
+    
+    return beads
+  }
+
+  // Calculate distance from point to curve
+  const getDistanceToCurve = (x, y, curvePoints) => {
+    let minDistance = Infinity
+    
+    for (const point of curvePoints) {
+      const distance = Math.sqrt(Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2))
+      if (distance < minDistance) {
+        minDistance = distance
+      }
+    }
+    
+    return minDistance
+  }
+
+  // Sample color from bead center
+  const sampleBeadColor = (data, width, height, centerX, centerY, radius) => {
+    let totalR = 0, totalG = 0, totalB = 0, count = 0
+    const sampleRadius = Math.max(Math.min(radius * 0.6, 10), 2)
+    
+    for (let dy = -sampleRadius; dy <= sampleRadius; dy++) {
+      for (let dx = -sampleRadius; dx <= sampleRadius; dx++) {
+        const nx = Math.round(centerX + dx)
+        const ny = Math.round(centerY + dy)
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        
+        if (dist <= sampleRadius && nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          const pixelIdx = (ny * width + nx) * 4
+          
+          if (pixelIdx >= 0 && pixelIdx + 2 < data.length) {
+            const r = data[pixelIdx]
+            const g = data[pixelIdx + 1]
+            const b = data[pixelIdx + 2]
+            
+            if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+              totalR += r
+              totalG += g
+              totalB += b
+              count++
+            }
+          }
+        }
+      }
+    }
+    
+    if (count === 0) return null
+    
+    const avgR = Math.round(totalR / count)
+    const avgG = Math.round(totalG / count)
+    const avgB = Math.round(totalB / count)
+    
+    return [avgR, avgG, avgB]
   }
 
   // Detect circular beads using OpenCV
@@ -366,14 +780,20 @@ function App() {
     const detectedBeads = detectBeadsWithOpenCV(data, width, height)
     console.log(`Beads found: ${detectedBeads.length}`)
 
-    // Sort beads by position (left to right, top to bottom for bracelet order)
+    // Sort beads along the bracelet curve path
+    const imageCenterX = width / 2
+    const imageCenterY = height / 2
+    
     detectedBeads.sort((a, b) => {
-      // Primary sort by Y position (horizontal bracelet)
-      if (Math.abs(a.centerY - b.centerY) > 50) {
-        return a.centerY - b.centerY
-      }
-      // Secondary sort by X position
-      return a.centerX - b.centerX
+      // Calculate angle from center for each bead
+      const angleA = Math.atan2(a.centerY - imageCenterY, a.centerX - imageCenterX)
+      const angleB = Math.atan2(b.centerY - imageCenterY, b.centerX - imageCenterX)
+      
+      // Normalize angles to 0-2π range
+      const normalizedAngleA = angleA < 0 ? angleA + 2 * Math.PI : angleA
+      const normalizedAngleB = angleB < 0 ? angleB + 2 * Math.PI : angleB
+      
+      return normalizedAngleA - normalizedAngleB
     })
 
     // Remove overlapping beads - keep the larger ones
@@ -406,13 +826,13 @@ function App() {
     console.log(`Final beads detected: ${uniqueBeads.length}`)
     
     // Update debug info
-    const debugText = `Image: ${width}x${height}, OpenCV circles: ${detectedBeads.length}, Final beads: ${uniqueBeads.length}`
+    const debugText = `Image: ${width}x${height}, Bracelet curve: ${braceletCurve ? braceletCurve.length : 0} points, Beads found: ${uniqueBeads.length}`
     setDebugInfo(debugText)
 
     setDetectedBeads(uniqueBeads)
     
     // Draw markers on overlay
-    drawBeadMarkers(uniqueBeads, width, height)
+    drawBeadMarkers(uniqueBeads, width, height, braceletCurve)
   }
 
   // Continuous detection
