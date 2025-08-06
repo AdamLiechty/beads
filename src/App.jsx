@@ -620,10 +620,8 @@ function App() {
     const fittedEllipse = cv.fitEllipse(contour)
     console.log(`Initial fitted ellipse: center=(${fittedEllipse.center.x.toFixed(1)}, ${fittedEllipse.center.y.toFixed(1)}), axes=(${fittedEllipse.size.width.toFixed(1)}, ${fittedEllipse.size.height.toFixed(1)}), angle=${fittedEllipse.angle.toFixed(1)}°`)
     
-    // Function to evaluate ellipse coverage of white regions
+    // Function to evaluate ellipse boundary coverage of white regions
     const evaluateEllipseCoverage = (ellipse) => {
-      const points = []
-      const numPoints = 50 // Sample points for evaluation
       const centerX = ellipse.center.x
       const centerY = ellipse.center.y
       const majorAxis = Math.max(ellipse.size.width, ellipse.size.height) / 2
@@ -631,13 +629,22 @@ function App() {
       const angleRad = (ellipse.angle * Math.PI) / 180
       const isMajorHorizontal = ellipse.size.width > ellipse.size.height
       
+      // Check if ellipse is within image bounds
+      const maxRadius = Math.max(majorAxis, minorAxis)
+      if (centerX - maxRadius < 0 || centerX + maxRadius >= width || 
+          centerY - maxRadius < 0 || centerY + maxRadius >= height) {
+        return 0 // Ellipse outside bounds
+      }
+      
+      // Sample points ON the ellipse boundary
+      const numPoints = 100 // More points for better coverage
       let whitePoints = 0
       let totalPoints = 0
       
       for (let i = 0; i < numPoints; i++) {
         const t = (2 * Math.PI * i) / numPoints
         
-        // Parametric ellipse equations
+        // Parametric ellipse equations for points ON the boundary
         let x, y
         if (isMajorHorizontal) {
           x = centerX + majorAxis * Math.cos(t) * Math.cos(angleRad) - minorAxis * Math.sin(t) * Math.sin(angleRad)
@@ -667,14 +674,22 @@ function App() {
     let bestCoverage = evaluateEllipseCoverage(fittedEllipse)
     console.log(`Initial coverage: ${(bestCoverage * 100).toFixed(1)}%`)
     
-    // Try different center positions
-    const centerSearchRadius = Math.min(width, height) * 0.1
-    const centerStep = Math.min(width, height) * 0.02
+    // Try different center positions within the image
+    const centerSearchRadius = Math.min(width, height) * 0.2
+    const centerStep = Math.min(width, height) * 0.005 // Finer search
     
     for (let dx = -centerSearchRadius; dx <= centerSearchRadius; dx += centerStep) {
       for (let dy = -centerSearchRadius; dy <= centerSearchRadius; dy += centerStep) {
+        const testCenterX = fittedEllipse.center.x + dx
+        const testCenterY = fittedEllipse.center.y + dy
+        
+        // Ensure center is within image bounds
+        if (testCenterX < 0 || testCenterX >= width || testCenterY < 0 || testCenterY >= height) {
+          continue
+        }
+        
         const testEllipse = {
-          center: { x: fittedEllipse.center.x + dx, y: fittedEllipse.center.y + dy },
+          center: { x: testCenterX, y: testCenterY },
           size: fittedEllipse.size,
           angle: fittedEllipse.angle
         }
@@ -687,12 +702,31 @@ function App() {
       }
     }
     
-    // Try different sizes
-    const sizeRange = 0.3 // ±30% size variation
-    const sizeStep = 0.05
+    // Try different sizes, focusing on circular shapes
+    const sizeRange = 0.6 // ±60% size variation
+    const sizeStep = 0.01 // Finer size search
     
-    for (let scaleX = 1 - sizeRange; scaleX <= 1 + sizeRange; scaleX += sizeStep) {
-      for (let scaleY = 1 - sizeRange; scaleY <= 1 + sizeRange; scaleY += sizeStep) {
+    for (let scale = 0.4; scale <= 1.6; scale += sizeStep) {
+      // Try circular shapes (same width and height)
+      const testEllipse = {
+        center: bestEllipse.center,
+        size: { 
+          width: fittedEllipse.size.width * scale, 
+          height: fittedEllipse.size.height * scale 
+        },
+        angle: fittedEllipse.angle
+      }
+      
+      const coverage = evaluateEllipseCoverage(testEllipse)
+      if (coverage > bestCoverage) {
+        bestCoverage = coverage
+        bestEllipse = testEllipse
+      }
+    }
+    
+    // Also try some elliptical variations
+    for (let scaleX = 0.6; scaleX <= 1.4; scaleX += 0.02) {
+      for (let scaleY = 0.6; scaleY <= 1.4; scaleY += 0.02) {
         const testEllipse = {
           center: bestEllipse.center,
           size: { 
