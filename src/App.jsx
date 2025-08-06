@@ -339,7 +339,7 @@ function App() {
       cv.morphologyEx(connectedEdges, connectedEdges, cv.MORPH_CLOSE, hugeKernel)
       
       // Try different density thresholds to find a valid bracelet loop
-      for (let densityThreshold = 10; densityThreshold <= 100; densityThreshold += 10) {
+      for (let densityThreshold = 1; densityThreshold <= 50; densityThreshold += 2) {
         // Debug: save density map for key thresholds
         if (densityThreshold === 10 || densityThreshold === 20 || densityThreshold === 30) {
           const debugDensityMap = new cv.Mat()
@@ -378,31 +378,45 @@ function App() {
         cv.threshold(densityMap, densityMask, densityThreshold, 255, cv.THRESH_BINARY)
         
         // Use morphological operations to connect nearby high-density areas
-        const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(11, 11))
+        const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(15, 15))
         const morph = new cv.Mat()
         cv.morphologyEx(densityMask, morph, cv.MORPH_CLOSE, kernel)
+        
+        // Apply Gaussian blur to smooth the density map
+        const smoothed = new cv.Mat()
+        cv.GaussianBlur(morph, smoothed, new cv.Size(21, 21), 0, 0, cv.BORDER_DEFAULT)
+        
+        // Threshold again to get a cleaner binary mask
+        const cleanedMask = new cv.Mat()
+        cv.threshold(smoothed, cleanedMask, 127, 255, cv.THRESH_BINARY)
         
         // Find contours for this density threshold
         const testContours = new cv.MatVector()
         const testHierarchy = new cv.Mat()
         cv.findContours(
-          morph,
+          cleanedMask,
           testContours,
           testHierarchy,
           cv.RETR_EXTERNAL,
           cv.CHAIN_APPROX_SIMPLE
         )
         
+        // Debug: log contour count for this threshold
+        if (testContours.size() > 0) {
+          console.log(`Threshold ${densityThreshold}: found ${testContours.size()} contours`)
+        }
+        
         // Evaluate contours for this density threshold
         for (let i = 0; i < testContours.size(); i++) {
           const contour = testContours.get(i)
           const area = cv.contourArea(contour)
           
-          // Filter by size
-          const minArea = Math.min(width, height) * 0.08
-          const maxArea = Math.min(width, height) * 0.9
+                            // Filter by size
+          const minArea = 100 // Minimum reasonable area for a bracelet contour
+          const maxArea = width * height * 0.8 // Use total image area, not min dimension
           
           if (area < minArea || area > maxArea) {
+            console.log(`Contour ${i} rejected by size: area=${area.toFixed(0)}, min=${minArea.toFixed(0)}, max=${maxArea.toFixed(0)}`)
             continue
           }
           
@@ -410,16 +424,23 @@ function App() {
           const centerInside = cv.pointPolygonTest(contour, new cv.Point(imageCenterX, imageCenterY), false) >= 0
           
           if (!centerInside) {
+            console.log(`Contour ${i} rejected: center not inside`)
             continue
           }
           
-          // Calculate scoring
-          const boundingRect = cv.boundingRect(contour)
-          const aspectRatio = boundingRect.width / boundingRect.height
-          const perimeter = cv.arcLength(contour, true)
-          const circularity = (4 * Math.PI * area) / (perimeter * perimeter)
+          // Simplify the contour to reduce noise and twists
+          const epsilon = 0.02 * cv.arcLength(contour, true) // 2% of perimeter
+          const simplifiedContour = new cv.Mat()
+          cv.approxPolyDP(contour, simplifiedContour, epsilon, true)
           
-          const areaScore = Math.min(area / (Math.min(width, height) * 0.4), 1)
+          // Calculate scoring using simplified contour
+          const boundingRect = cv.boundingRect(simplifiedContour)
+          const aspectRatio = boundingRect.width / boundingRect.height
+          const perimeter = cv.arcLength(simplifiedContour, true)
+          const simplifiedArea = cv.contourArea(simplifiedContour)
+          const circularity = (4 * Math.PI * simplifiedArea) / (perimeter * perimeter)
+          
+                      const areaScore = Math.min(simplifiedArea / (Math.min(width, height) * 0.4), 1)
           const circularityScore = circularity
           const aspectRatioScore = 1 - Math.abs(1 - aspectRatio)
           
@@ -427,9 +448,9 @@ function App() {
           
           if (totalScore > bestScore) {
             bestScore = totalScore
-            bestBraceletContour = contour.clone()
+            bestBraceletContour = simplifiedContour.clone()
             bestDensityThreshold = densityThreshold
-            console.log(`Better contour found: density=${densityThreshold}, score=${totalScore.toFixed(3)}, area=${area.toFixed(0)}`)
+            console.log(`Better contour found: density=${densityThreshold}, score=${totalScore.toFixed(3)}, area=${simplifiedArea.toFixed(0)}`)
           }
         }
         
@@ -437,6 +458,8 @@ function App() {
         densityMap.delete()
         densityMask.delete()
         morph.delete()
+        smoothed.delete()
+        cleanedMask.delete()
         kernel.delete()
         testContours.delete()
         testHierarchy.delete()
@@ -497,7 +520,7 @@ function App() {
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
           const idx = (y * width + x) * 4
-          const segValue = cleanedMask.ucharPtr(y, x)[0]
+          const segValue = binary.ucharPtr(y, x)[0]
           segImageData.data[idx] = segValue
           segImageData.data[idx + 1] = segValue
           segImageData.data[idx + 2] = segValue
@@ -535,6 +558,14 @@ function App() {
         return []
       }
       
+      // Create a mask from the best contour for bead detection
+      const contourMask = new cv.Mat.zeros(height, width, cv.CV_8UC1)
+      const contourVector = new cv.MatVector()
+      contourVector.push_back(bestBraceletContour)
+      cv.drawContours(contourMask, contourVector, 0, new cv.Scalar(255), -1)
+      
+      console.log('Contour mask created for bead detection')
+      
       console.log(`Best bracelet contour score: ${bestScore.toFixed(3)}`)
       
       // Create a mask for the bracelet area
@@ -544,7 +575,7 @@ function App() {
       cv.drawContours(braceletMask, braceletContourVector, 0, new cv.Scalar(255), -1)
       
       // Find the bracelet curve path
-      const braceletCurve = extractBraceletCurve(bestBraceletContour, width, height)
+      const braceletCurve = extractBraceletCurve(bestBraceletContour, width, height, finalDensityMask)
       console.log(`Bracelet curve extracted: ${braceletCurve ? braceletCurve.length : 0} points`)
       
       // Find beads along the bracelet curve
@@ -581,42 +612,137 @@ function App() {
     }
   }
 
-  // Extract the bracelet curve path
-  const extractBraceletCurve = (contour, width, height) => {
+  // Extract the bracelet curve path using ellipse fitting
+  const extractBraceletCurve = (contour, width, height, densityMask) => {
     const cv = window.cv
     
-    // Get contour points - OpenCV contours are stored as 32-bit integers
-    const points = []
-    for (let i = 0; i < contour.rows; i++) {
-      const x = contour.data32S[i * 2]
-      const y = contour.data32S[i * 2 + 1]
-      points.push({ x, y })
+    // Get the fitted ellipse as a starting point
+    const fittedEllipse = cv.fitEllipse(contour)
+    console.log(`Initial fitted ellipse: center=(${fittedEllipse.center.x.toFixed(1)}, ${fittedEllipse.center.y.toFixed(1)}), axes=(${fittedEllipse.size.width.toFixed(1)}, ${fittedEllipse.size.height.toFixed(1)}), angle=${fittedEllipse.angle.toFixed(1)}°`)
+    
+    // Function to evaluate ellipse coverage of white regions
+    const evaluateEllipseCoverage = (ellipse) => {
+      const points = []
+      const numPoints = 50 // Sample points for evaluation
+      const centerX = ellipse.center.x
+      const centerY = ellipse.center.y
+      const majorAxis = Math.max(ellipse.size.width, ellipse.size.height) / 2
+      const minorAxis = Math.min(ellipse.size.width, ellipse.size.height) / 2
+      const angleRad = (ellipse.angle * Math.PI) / 180
+      const isMajorHorizontal = ellipse.size.width > ellipse.size.height
+      
+      let whitePoints = 0
+      let totalPoints = 0
+      
+      for (let i = 0; i < numPoints; i++) {
+        const t = (2 * Math.PI * i) / numPoints
+        
+        // Parametric ellipse equations
+        let x, y
+        if (isMajorHorizontal) {
+          x = centerX + majorAxis * Math.cos(t) * Math.cos(angleRad) - minorAxis * Math.sin(t) * Math.sin(angleRad)
+          y = centerY + majorAxis * Math.cos(t) * Math.sin(angleRad) + minorAxis * Math.sin(t) * Math.cos(angleRad)
+        } else {
+          x = centerX + minorAxis * Math.cos(t) * Math.cos(angleRad) - majorAxis * Math.sin(t) * Math.sin(angleRad)
+          y = centerY + minorAxis * Math.cos(t) * Math.sin(angleRad) + majorAxis * Math.sin(t) * Math.cos(angleRad)
+        }
+        
+        const xInt = Math.round(x)
+        const yInt = Math.round(y)
+        
+        if (xInt >= 0 && xInt < width && yInt >= 0 && yInt < height) {
+          totalPoints++
+          const pixelValue = densityMask.ucharPtr(yInt, xInt)[0]
+          if (pixelValue > 127) { // White region
+            whitePoints++
+          }
+        }
+      }
+      
+      return totalPoints > 0 ? whitePoints / totalPoints : 0
     }
     
-    console.log(`Extracted ${points.length} points from contour`)
+    // Search for better ellipse parameters
+    let bestEllipse = fittedEllipse
+    let bestCoverage = evaluateEllipseCoverage(fittedEllipse)
+    console.log(`Initial coverage: ${(bestCoverage * 100).toFixed(1)}%`)
     
-    // Sort points by angle from center to create a continuous curve
-    const centerX = width / 2
-    const centerY = height / 2
+    // Try different center positions
+    const centerSearchRadius = Math.min(width, height) * 0.1
+    const centerStep = Math.min(width, height) * 0.02
     
-    points.sort((a, b) => {
-      const angleA = Math.atan2(a.y - centerY, a.x - centerX)
-      const angleB = Math.atan2(b.y - centerY, b.x - centerX)
-      return angleA - angleB
-    })
-    
-    // Remove duplicate points and smooth the curve
-    const uniquePoints = []
-    for (let i = 0; i < points.length; i++) {
-      if (i === 0 || 
-          Math.abs(points[i].x - points[i-1].x) > 2 || 
-          Math.abs(points[i].y - points[i-1].y) > 2) {
-        uniquePoints.push(points[i])
+    for (let dx = -centerSearchRadius; dx <= centerSearchRadius; dx += centerStep) {
+      for (let dy = -centerSearchRadius; dy <= centerSearchRadius; dy += centerStep) {
+        const testEllipse = {
+          center: { x: fittedEllipse.center.x + dx, y: fittedEllipse.center.y + dy },
+          size: fittedEllipse.size,
+          angle: fittedEllipse.angle
+        }
+        
+        const coverage = evaluateEllipseCoverage(testEllipse)
+        if (coverage > bestCoverage) {
+          bestCoverage = coverage
+          bestEllipse = testEllipse
+        }
       }
     }
     
-    console.log(`Curve has ${uniquePoints.length} unique points`)
-    return uniquePoints
+    // Try different sizes
+    const sizeRange = 0.3 // ±30% size variation
+    const sizeStep = 0.05
+    
+    for (let scaleX = 1 - sizeRange; scaleX <= 1 + sizeRange; scaleX += sizeStep) {
+      for (let scaleY = 1 - sizeRange; scaleY <= 1 + sizeRange; scaleY += sizeStep) {
+        const testEllipse = {
+          center: bestEllipse.center,
+          size: { 
+            width: fittedEllipse.size.width * scaleX, 
+            height: fittedEllipse.size.height * scaleY 
+          },
+          angle: fittedEllipse.angle
+        }
+        
+        const coverage = evaluateEllipseCoverage(testEllipse)
+        if (coverage > bestCoverage) {
+          bestCoverage = coverage
+          bestEllipse = testEllipse
+        }
+      }
+    }
+    
+    console.log(`Best ellipse found: center=(${bestEllipse.center.x.toFixed(1)}, ${bestEllipse.center.y.toFixed(1)}), axes=(${bestEllipse.size.width.toFixed(1)}, ${bestEllipse.size.height.toFixed(1)}), angle=${bestEllipse.angle.toFixed(1)}°, coverage: ${(bestCoverage * 100).toFixed(1)}%`)
+    
+    // Generate points along the best ellipse
+    const points = []
+    const numPoints = 100 // Number of points to generate
+    const centerX = bestEllipse.center.x
+    const centerY = bestEllipse.center.y
+    const majorAxis = Math.max(bestEllipse.size.width, bestEllipse.size.height) / 2
+    const minorAxis = Math.min(bestEllipse.size.width, bestEllipse.size.height) / 2
+    const angleRad = (bestEllipse.angle * Math.PI) / 180
+    const isMajorHorizontal = bestEllipse.size.width > bestEllipse.size.height
+    
+    for (let i = 0; i < numPoints; i++) {
+      const t = (2 * Math.PI * i) / numPoints
+      
+      // Parametric ellipse equations
+      let x, y
+      if (isMajorHorizontal) {
+        x = centerX + majorAxis * Math.cos(t) * Math.cos(angleRad) - minorAxis * Math.sin(t) * Math.sin(angleRad)
+        y = centerY + majorAxis * Math.cos(t) * Math.sin(angleRad) + minorAxis * Math.sin(t) * Math.cos(angleRad)
+      } else {
+        x = centerX + minorAxis * Math.cos(t) * Math.cos(angleRad) - majorAxis * Math.sin(t) * Math.sin(angleRad)
+        y = centerY + minorAxis * Math.cos(t) * Math.sin(angleRad) + majorAxis * Math.sin(t) * Math.cos(angleRad)
+      }
+      
+      points.push({
+        x: Math.round(x),
+        y: Math.round(y)
+      })
+    }
+    
+    console.log(`Generated ${points.length} points along optimized ellipse`)
+    return points
   }
 
   // Find beads along the bracelet curve
