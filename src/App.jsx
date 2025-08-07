@@ -506,8 +506,14 @@ function App() {
       const finalDensityMap = new cv.Mat()
       cv.GaussianBlur(connectedEdges, finalDensityMap, new cv.Size(21, 21), 0)
       
+      // Fill in small holes in the density map
+      const holeSize = Math.min(width, height) * 0.1 // 10% of image dimensions
+      const holeKernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(holeSize, holeSize))
+      const filledDensityMap = new cv.Mat()
+      cv.morphologyEx(finalDensityMap, filledDensityMap, cv.MORPH_CLOSE, holeKernel)
+      
       const finalDensityMask = new cv.Mat()
-      cv.threshold(finalDensityMap, finalDensityMask, bestDensityThreshold, 255, cv.THRESH_BINARY)
+      cv.threshold(filledDensityMap, finalDensityMask, bestDensityThreshold, 255, cv.THRESH_BINARY)
       
       const finalKernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(11, 11))
       const finalMorph = new cv.Mat()
@@ -616,8 +622,8 @@ function App() {
       setBraceletCurve(braceletCurve)
       console.log(`Bracelet curve stored for visualization: ${braceletCurve ? braceletCurve.length : 0} points`)
       
-      // Clone the density map before cleanup
-      const densityMapClone = finalDensityMap.clone()
+      // Clone the filled density map before cleanup
+      const densityMapClone = filledDensityMap.clone()
       
       // Clean up OpenCV objects
       src.delete()
@@ -629,6 +635,8 @@ function App() {
       hugeKernel.delete()
       connectedEdges.delete()
       finalDensityMap.delete()
+      filledDensityMap.delete()
+      holeKernel.delete()
       finalDensityMask.delete()
       finalMorph.delete()
       finalKernel.delete()
