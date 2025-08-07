@@ -160,7 +160,7 @@ function App() {
   }
 
   // Draw bead markers and bracelet curve on overlay
-  const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null) => {
+  const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null, edges = null, colorSamples = null) => {
     const overlayCanvas = overlayCanvasRef.current
     if (!overlayCanvas) return
 
@@ -183,10 +183,10 @@ function App() {
     const ctx = overlayCanvas.getContext('2d')
     ctx.clearRect(0, 0, displayRect.width, displayRect.height)
 
-    // Draw density mask as translucent overlay if available
+    // Draw density overlay (heat map)
     if (densityMask) {
       console.log('Drawing density mask overlay')
-      const imageData = ctx.createImageData(displayRect.width, displayRect.height)
+      const densityImageData = ctx.createImageData(displayRect.width, displayRect.height)
       
       for (let y = 0; y < displayRect.height; y++) {
         for (let x = 0; x < displayRect.width; x++) {
@@ -203,43 +203,43 @@ function App() {
             const normalizedDensity = densityValue / 255 // Convert to 0-1 range
             const alpha = Math.round((1 - normalizedDensity) * 255) // Invert so higher density = lower alpha
             
-            imageData.data[idx] = 0      // Black
-            imageData.data[idx + 1] = 0  // Black
-            imageData.data[idx + 2] = 0  // Black
-            imageData.data[idx + 3] = alpha
+            densityImageData.data[idx] = 0      // Black
+            densityImageData.data[idx + 1] = 0  // Black
+            densityImageData.data[idx + 2] = 0  // Black
+            densityImageData.data[idx + 3] = alpha
           } else {
-            imageData.data[idx] = 0
-            imageData.data[idx + 1] = 0
-            imageData.data[idx + 2] = 0
-            imageData.data[idx + 3] = 0
+            densityImageData.data[idx] = 0
+            densityImageData.data[idx + 1] = 0
+            densityImageData.data[idx + 2] = 0
+            densityImageData.data[idx + 3] = 0
           }
         }
       }
       
-      ctx.putImageData(imageData, 0, 0)
+      ctx.putImageData(densityImageData, 0, 0)
     }
 
-    // Draw bracelet curve and bead samples if available
-    if (braceletCurve && braceletCurve.length > 0) {
-      console.log(`Drawing bracelet curve with ${braceletCurve.length} points`)
+    // Draw color samples as line segments
+    if (colorSamples && colorSamples.length > 0) {
+      console.log(`Drawing ${colorSamples.length} color samples`)
       
-      // Draw colored line segments around the ellipse
-      ctx.lineWidth = 8 // Thick lines
+      // Draw colored line segments for all samples
+      ctx.lineWidth = 4 // Thinner lines for samples
       ctx.setLineDash([]) // No dash
       
-      for (let i = 0; i < beads.length; i++) {
-        const bead = beads[i]
-        const x = bead.centerX * scaleX
-        const y = bead.centerY * scaleY
+      for (let i = 0; i < colorSamples.length; i++) {
+        const sample = colorSamples[i]
+        const x = sample.centerX * scaleX
+        const y = sample.centerY * scaleY
         
         // Use the sampled color from the image
-        ctx.strokeStyle = bead.hex
+        ctx.strokeStyle = sample.hex
         
-        // Draw a short line segment at the bead position
-        const segmentLength = 10
+        // Draw a short line segment at the sample position
+        const segmentLength = 8
         
         // Calculate perpendicular direction for the line segment
-        const angle = bead.angle
+        const angle = sample.angle
         const perpX = Math.cos(angle)
         const perpY = Math.sin(angle)
         
@@ -249,10 +249,59 @@ function App() {
         ctx.lineTo(x + perpX * segmentLength/2, y + perpY * segmentLength/2)
         ctx.stroke()
       }
+    }
+
+    // Draw grouped beads as circles
+    if (beads && beads.length > 0) {
+      console.log(`Drawing ${beads.length} grouped beads`)
       
-      console.log('Bracelet curve with bead colors drawn')
-    } else {
-      console.log('No bracelet curve to draw')
+      for (let i = 0; i < beads.length; i++) {
+        const bead = beads[i]
+        const x = bead.centerX * scaleX
+        const y = bead.centerY * scaleY
+        const radius = (bead.radius || 10) * Math.min(scaleX, scaleY)
+        
+        // Draw bead circle with color
+        ctx.fillStyle = bead.hex
+        ctx.strokeStyle = 'white'
+        ctx.lineWidth = 2
+        
+        ctx.beginPath()
+        ctx.arc(x, y, radius, 0, 2 * Math.PI)
+        ctx.fill()
+        ctx.stroke()
+        
+        // Draw bead number
+        ctx.fillStyle = 'white'
+        ctx.font = 'bold 12px Arial'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText((i + 1).toString(), x, y)
+      }
+      
+      console.log('Grouped beads drawn')
+    }
+
+    // Draw edge detection lines on top of everything
+    if (edges) {
+      console.log('Drawing edge detection lines on top')
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)' // White with transparency
+      ctx.lineWidth = 1
+      
+      // Draw edges as lines
+      for (let y = 0; y < imageHeight; y += 2) { // Sample every 2 pixels for performance
+        for (let x = 0; x < imageWidth; x += 2) {
+          const edgeValue = edges.ucharPtr(y, x)[0]
+          if (edgeValue > 0) {
+            const screenX = x * scaleX
+            const screenY = y * scaleY
+            
+            ctx.beginPath()
+            ctx.arc(screenX, screenY, 0.5, 0, 2 * Math.PI)
+            ctx.stroke()
+          }
+        }
+      }
     }
     
     console.log('Overlay drawing complete')
@@ -557,15 +606,17 @@ function App() {
       const braceletCurve = braceletCurveData.points
       console.log(`Bracelet curve extracted: ${braceletCurve ? braceletCurve.length : 0} points`)
       
-        // Sample colors along the ellipse for visualization
-  const beads = findBeadsAlongEllipse(data, width, height, filledDensityMap, braceletCurveData)
+        // Sample colors along the ellipse and group into beads
+  const colorSamples = findBeadsAlongEllipse(data, width, height, filledDensityMap, braceletCurveData)
+  const beads = groupSamplesIntoBeads(colorSamples, edges, width, height)
       
       // Store bracelet curve for visualization
       setBraceletCurve(braceletCurve)
       console.log(`Bracelet curve stored for visualization: ${braceletCurve ? braceletCurve.length : 0} points`)
       
-      // Clone the filled density map before cleanup
+      // Clone the filled density map and edges before cleanup
       const densityMapClone = filledDensityMap.clone()
+      const edgesClone = edges.clone()
       
       // Clean up OpenCV objects
       src.delete()
@@ -588,11 +639,11 @@ function App() {
       braceletContourVector.delete()
       
       console.log(`Found ${beads.length} beads along the bracelet curve`)
-      return { beads, densityMask: densityMapClone }
+      return { beads, densityMask: densityMapClone, edges: edgesClone, colorSamples }
       
     } catch (error) {
       console.error('Error in OpenCV detection:', error)
-      return { beads: [], densityMask: null }
+      return { beads: [], densityMask: null, edges: null, colorSamples: [] }
     }
   }
 
@@ -806,6 +857,136 @@ function App() {
       console.log(`Bead ${i}: ${bead.hex} (RGB: ${bead.color.join(',')}) vibrancy: ${bead.vibrancy.toFixed(3)}`)
     }
     
+    return beads
+  }
+
+  // Group color samples into individual beads
+  const groupSamplesIntoBeads = (colorSamples, edges, width, height) => {
+    if (!colorSamples || colorSamples.length === 0) return []
+    
+    console.log(`Grouping ${colorSamples.length} color samples into beads`)
+    
+    // Function to calculate color distance
+    const colorDistance = (color1, color2) => {
+      const dr = color1[0] - color2[0]
+      const dg = color1[1] - color2[1]
+      const db = color1[2] - color2[2]
+      return Math.sqrt(dr * dr + dg * dg + db * db)
+    }
+    
+    // Function to check if there's an edge between two points
+    const hasEdgeBetween = (point1, point2) => {
+      if (!edges) return false
+      
+      const dx = point2.centerX - point1.centerX
+      const dy = point2.centerY - point1.centerY
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const steps = Math.ceil(distance)
+      
+      if (steps === 0) return false
+      
+      const stepX = dx / steps
+      const stepY = dy / steps
+      
+      for (let i = 0; i <= steps; i++) {
+        const x = Math.round(point1.centerX + i * stepX)
+        const y = Math.round(point1.centerY + i * stepY)
+        
+        if (x >= 0 && x < width && y >= 0 && y < height) {
+          const edgeValue = edges.ucharPtr(y, x)[0]
+          if (edgeValue > 100) { // Strong edge threshold
+            return true
+          }
+        }
+      }
+      return false
+    }
+    
+    // Group samples into beads
+    const groups = []
+    const used = new Set()
+    
+    for (let i = 0; i < colorSamples.length; i++) {
+      if (used.has(i)) continue
+      
+      const currentGroup = [i]
+      used.add(i)
+      
+      // Find adjacent samples with similar colors
+      for (let j = 0; j < colorSamples.length; j++) {
+        if (used.has(j)) continue
+        
+        const sample1 = colorSamples[i]
+        const sample2 = colorSamples[j]
+        
+        // Check if samples are adjacent (within reasonable distance)
+        const dx = sample1.centerX - sample2.centerX
+        const dy = sample1.centerY - sample2.centerY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        
+        if (distance < 30) { // Adjacent threshold
+          // Check color similarity
+          const colorDiff = colorDistance(sample1.color, sample2.color)
+          
+          if (colorDiff < 40) { // Color similarity threshold
+            // Check if there's an edge between them
+            if (!hasEdgeBetween(sample1, sample2)) {
+              currentGroup.push(j)
+              used.add(j)
+            }
+          }
+        }
+      }
+      
+      groups.push(currentGroup)
+    }
+    
+    console.log(`Grouped ${colorSamples.length} samples into ${groups.length} potential beads`)
+    
+    // Create bead objects from groups
+    const beads = []
+    
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      const group = groups[groupIndex]
+      
+      if (group.length >= 3) { // Minimum 3 samples to form a bead
+        // Calculate average position and color
+        let avgX = 0, avgY = 0
+        let avgR = 0, avgG = 0, avgB = 0
+        let totalVibrancy = 0
+        
+        for (const sampleIndex of group) {
+          const sample = colorSamples[sampleIndex]
+          avgX += sample.centerX
+          avgY += sample.centerY
+          avgR += sample.color[0]
+          avgG += sample.color[1]
+          avgB += sample.color[2]
+          totalVibrancy += sample.vibrancy
+        }
+        
+        avgX /= group.length
+        avgY /= group.length
+        avgR /= group.length
+        avgG /= group.length
+        avgB /= group.length
+        const avgVibrancy = totalVibrancy / group.length
+        
+        const avgColor = [Math.round(avgR), Math.round(avgG), Math.round(avgB)]
+        
+        beads.push({
+          centerX: avgX,
+          centerY: avgY,
+          color: avgColor,
+          hex: rgbToHex(avgColor[0], avgColor[1], avgColor[2]),
+          radius: group.length * 2, // Size based on number of samples
+          vibrancy: avgVibrancy,
+          sampleCount: group.length
+        })
+      }
+    }
+    
+    console.log(`Created ${beads.length} beads from groups`)
     return beads
   }
 
@@ -1033,6 +1214,8 @@ function App() {
     const result = detectBeadsWithOpenCV(data, width, height)
     const detectedBeads = result.beads
     const densityMask = result.densityMask
+    const edges = result.edges
+    const colorSamples = result.colorSamples
     console.log(`Beads found: ${detectedBeads.length}`)
 
     // Sort beads along the bracelet curve path
@@ -1086,12 +1269,15 @@ function App() {
 
     setDetectedBeads(uniqueBeads)
     
-    // Draw markers on overlay
-    drawBeadMarkers(uniqueBeads, width, height, braceletCurve, densityMask)
+    // Draw markers on overlay (pass both color samples and grouped beads)
+    drawBeadMarkers(uniqueBeads, width, height, braceletCurve, densityMask, edges, colorSamples)
     
-    // Clean up the density mask after drawing
+    // Clean up the density mask and edges after drawing
     if (densityMask) {
       densityMask.delete()
+    }
+    if (edges) {
+      edges.delete()
     }
   }
 
