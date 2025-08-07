@@ -582,7 +582,7 @@ function App() {
       // Use the best bracelet contour found from dynamic thresholding
       if (!bestBraceletContour) {
         console.log('No suitable bracelet contour found')
-        return []
+        return { beads: [], densityMask: null, edges: null, colorSamples: [] }
       }
       
       // Create a mask from the best contour for bead detection
