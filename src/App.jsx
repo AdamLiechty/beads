@@ -219,102 +219,58 @@ function App() {
       ctx.putImageData(imageData, 0, 0)
     }
 
-    // Draw bracelet curve if available
+    // Draw bracelet curve and bead samples if available
     if (braceletCurve && braceletCurve.length > 0) {
       console.log(`Drawing bracelet curve with ${braceletCurve.length} points`)
-      console.log(`Scale factors: scaleX=${scaleX}, scaleY=${scaleY}`)
-      console.log(`Display dimensions: ${displayRect.width}x${displayRect.height}`)
-      console.log(`Image dimensions: ${imageWidth}x${imageHeight}`)
       
-      // Log first few points to debug
-      for (let i = 0; i < Math.min(5, braceletCurve.length); i++) {
-        const point = braceletCurve[i]
-        console.log(`Point ${i}: (${point.x}, ${point.y}) -> (${point.x * scaleX}, ${point.y * scaleY})`)
-        console.log(`Point ${i} types: x=${typeof point.x}, y=${typeof point.y}`)
-        console.log(`Point ${i} valid: x=${!isNaN(point.x)}, y=${!isNaN(point.y)}`)
-      }
-      
-      ctx.strokeStyle = '#4CAF50'
-      ctx.lineWidth = 3 // Make it thicker
-      ctx.setLineDash([5, 5])
-      ctx.beginPath()
+      // Draw colored line segments around the ellipse
+      ctx.lineWidth = 8 // Thick lines
+      ctx.setLineDash([]) // No dash
       
       for (let i = 0; i < braceletCurve.length; i++) {
         const point = braceletCurve[i]
         const x = point.x * scaleX
         const y = point.y * scaleY
         
-        if (i === 0) {
-          ctx.moveTo(x, y)
+        // Use the sampled color from the image
+        const bead = beads[i]
+        if (bead) {
+          ctx.strokeStyle = bead.hex
         } else {
-          ctx.lineTo(x, y)
+          ctx.strokeStyle = '#4CAF50' // Default green if no bead found
+        }
+        
+        // Draw a short line segment at this point
+        const segmentLength = 10
+        const nextIndex = (i + 1) % braceletCurve.length
+        const nextPoint = braceletCurve[nextIndex]
+        const nextX = nextPoint.x * scaleX
+        const nextY = nextPoint.y * scaleY
+        
+        // Calculate direction vector
+        const dx = nextX - x
+        const dy = nextY - y
+        const length = Math.sqrt(dx * dx + dy * dy)
+        
+        if (length > 0) {
+          // Normalize and scale to segment length
+          const unitX = (dx / length) * segmentLength
+          const unitY = (dy / length) * segmentLength
+          
+          ctx.beginPath()
+          ctx.moveTo(x - unitX/2, y - unitY/2)
+          ctx.lineTo(x + unitX/2, y + unitY/2)
+          ctx.stroke()
         }
       }
       
-      // Close the curve
-      if (braceletCurve.length > 0) {
-        const firstPoint = braceletCurve[0]
-        const x = firstPoint.x * scaleX
-        const y = firstPoint.y * scaleY
-        ctx.lineTo(x, y)
-      }
-      
-      ctx.stroke()
-      ctx.setLineDash([]) // Reset line dash
-      
-      // Draw circles at each point to debug positioning
-      ctx.fillStyle = '#00FF00'
-      for (let i = 0; i < braceletCurve.length; i++) {
-        const point = braceletCurve[i]
-        const x = point.x * scaleX
-        const y = point.y * scaleY
-        ctx.beginPath()
-        ctx.arc(x, y, 3, 0, 2 * Math.PI)
-        ctx.fill()
-      }
-      
-      console.log('Bracelet curve drawn')
+      console.log('Bracelet curve with bead colors drawn')
     } else {
       console.log('No bracelet curve to draw')
     }
     
     console.log('Overlay drawing complete')
-
-    beads.forEach((bead, index) => {
-      // Scale the coordinates to match the displayed image
-      const x = bead.centerX * scaleX
-      const y = bead.centerY * scaleY
-      const radius = bead.radius * Math.min(scaleX, scaleY) // Use the smaller scale to maintain circularity
-
-      // Draw circle around bead
-      ctx.strokeStyle = '#FF6B6B'
-      ctx.lineWidth = 3
-      ctx.beginPath()
-      ctx.arc(x, y, radius, 0, 2 * Math.PI)
-      ctx.stroke()
-
-      // Draw filled circle for number background
-      ctx.fillStyle = '#FF6B6B'
-      ctx.beginPath()
-      ctx.arc(x, y - radius - 15, 15, 0, 2 * Math.PI)
-      ctx.fill()
-
-      // Draw number
-      ctx.fillStyle = 'white'
-      ctx.font = 'bold 16px Arial'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText((index + 1).toString(), x, y - radius - 15)
-
-      // Draw color indicator
-      ctx.fillStyle = bead.hex
-      ctx.beginPath()
-      ctx.arc(x, y + radius + 15, 10, 0, 2 * Math.PI)
-      ctx.fill()
-      ctx.strokeStyle = 'white'
-      ctx.lineWidth = 2
-      ctx.stroke()
-    })
+    // Bead circle markers removed to avoid clutter - only showing colored ellipse
   }
 
   // Convert RGB to Hex
@@ -611,12 +567,12 @@ function App() {
       cv.drawContours(braceletMask, braceletContourVector, 0, new cv.Scalar(255), -1)
       
       // Find the bracelet curve path
-      const braceletCurve = extractBraceletCurve(bestBraceletContour, width, height, finalDensityMap)
+      const braceletCurveData = extractBraceletCurve(bestBraceletContour, width, height, finalDensityMap)
+      const braceletCurve = braceletCurveData.points
       console.log(`Bracelet curve extracted: ${braceletCurve ? braceletCurve.length : 0} points`)
       
-      // DISABLED: Find beads along the bracelet curve
-      // const beads = findBeadsAlongCurve(data, width, height, braceletMask, braceletCurve)
-      const beads = [] // Empty array for now
+        // Sample colors along the ellipse for visualization
+  const beads = findBeadsAlongEllipse(data, width, height, filledDensityMap, braceletCurveData)
       
       // Store bracelet curve for visualization
       setBraceletCurve(braceletCurve)
@@ -771,10 +727,92 @@ function App() {
     }
     
     console.log(`Generated ${points.length} points along best circle`)
-    return points
+    return {
+      points: points,
+      center: bestCenter,
+      radius: bestRadius
+    }
   }
 
-  // Find beads along the bracelet curve
+  // Find beads along the ellipse using perpendicular sampling
+  const findBeadsAlongEllipse = (data, width, height, densityMap, curveData) => {
+    const cv = window.cv
+    const beads = []
+    
+    const { points, center, radius } = curveData
+    const numSamples = 100
+    const maxPerpendicularDistance = radius * 0.3 // 30% of radius
+    
+    console.log(`Sampling ${numSamples} points along ellipse with radius ${radius.toFixed(1)}`)
+    
+    for (let i = 0; i < numSamples; i++) {
+      const t = (2 * Math.PI * i) / numSamples
+      const ellipseX = center.x + radius * Math.cos(t)
+      const ellipseY = center.y + radius * Math.sin(t)
+      
+      // Calculate perpendicular direction (tangent is (-sin(t), cos(t)), so perpendicular is (cos(t), sin(t)))
+      const perpX = Math.cos(t)
+      const perpY = Math.sin(t)
+      
+      let bestColor = null
+      let bestVibrancy = 0
+      let bestDistance = 0
+      
+      // Sample along perpendicular line segment
+      const numPerpSamples = 20
+      for (let j = 0; j < numPerpSamples; j++) {
+        const perpDistance = (j - numPerpSamples / 2) * (maxPerpendicularDistance * 2) / numPerpSamples
+        const sampleX = ellipseX + perpDistance * perpX
+        const sampleY = ellipseY + perpDistance * perpY
+        
+        const xInt = Math.round(sampleX)
+        const yInt = Math.round(sampleY)
+        
+        if (xInt >= 0 && xInt < width && yInt >= 0 && yInt < height) {
+          // Check if point is above density threshold
+          const densityValue = densityMap.ucharPtr(yInt, xInt)[0]
+          if (densityValue > 127) { // Above threshold
+            // Sample color at this point
+            const idx = (yInt * width + xInt) * 4
+            const r = data[idx]
+            const g = data[idx + 1]
+            const b = data[idx + 2]
+            
+            // Calculate color vibrancy (saturation + brightness)
+            const max = Math.max(r, g, b)
+            const min = Math.min(r, g, b)
+            const saturation = max === 0 ? 0 : (max - min) / max
+            const brightness = max / 255
+            const vibrancy = saturation * brightness
+            
+            if (vibrancy > bestVibrancy) {
+              bestVibrancy = vibrancy
+              bestColor = [r, g, b]
+              bestDistance = perpDistance
+            }
+          }
+        }
+      }
+      
+      if (bestColor) {
+        beads.push({
+          centerX: ellipseX + bestDistance * perpX,
+          centerY: ellipseY + bestDistance * perpY,
+          color: bestColor,
+          hex: rgbToHex(bestColor[0], bestColor[1], bestColor[2]),
+          radius: 5, // Small radius for visualization
+          vibrancy: bestVibrancy,
+          angle: t,
+          perpDistance: bestDistance
+        })
+      }
+    }
+    
+    console.log(`Found ${beads.length} beads along ellipse`)
+    return beads
+  }
+
+  // Find beads along the bracelet curve (old method - disabled)
   const findBeadsAlongCurve = (data, width, height, braceletMask, curvePoints) => {
     const cv = window.cv
     const beads = []
