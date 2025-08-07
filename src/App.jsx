@@ -227,41 +227,27 @@ function App() {
       ctx.lineWidth = 8 // Thick lines
       ctx.setLineDash([]) // No dash
       
-      for (let i = 0; i < braceletCurve.length; i++) {
-        const point = braceletCurve[i]
-        const x = point.x * scaleX
-        const y = point.y * scaleY
+      for (let i = 0; i < beads.length; i++) {
+        const bead = beads[i]
+        const x = bead.centerX * scaleX
+        const y = bead.centerY * scaleY
         
         // Use the sampled color from the image
-        const bead = beads[i]
-        if (bead) {
-          ctx.strokeStyle = bead.hex
-        } else {
-          ctx.strokeStyle = '#4CAF50' // Default green if no bead found
-        }
+        ctx.strokeStyle = bead.hex
         
-        // Draw a short line segment at this point
+        // Draw a short line segment at the bead position
         const segmentLength = 10
-        const nextIndex = (i + 1) % braceletCurve.length
-        const nextPoint = braceletCurve[nextIndex]
-        const nextX = nextPoint.x * scaleX
-        const nextY = nextPoint.y * scaleY
         
-        // Calculate direction vector
-        const dx = nextX - x
-        const dy = nextY - y
-        const length = Math.sqrt(dx * dx + dy * dy)
+        // Calculate perpendicular direction for the line segment
+        const angle = bead.angle
+        const perpX = Math.cos(angle)
+        const perpY = Math.sin(angle)
         
-        if (length > 0) {
-          // Normalize and scale to segment length
-          const unitX = (dx / length) * segmentLength
-          const unitY = (dy / length) * segmentLength
-          
-          ctx.beginPath()
-          ctx.moveTo(x - unitX/2, y - unitY/2)
-          ctx.lineTo(x + unitX/2, y + unitY/2)
-          ctx.stroke()
-        }
+        // Draw line segment perpendicular to the ellipse
+        ctx.beginPath()
+        ctx.moveTo(x - perpX * segmentLength/2, y - perpY * segmentLength/2)
+        ctx.lineTo(x + perpX * segmentLength/2, y + perpY * segmentLength/2)
+        ctx.stroke()
       }
       
       console.log('Bracelet curve with bead colors drawn')
@@ -613,6 +599,7 @@ function App() {
   // Extract the bracelet curve path using global ellipse search
   const extractBraceletCurve = (contour, width, height, densityMask) => {
     const cv = window.cv
+    const NUM_SAMPLES = 200 // Single constant to control both ellipse and sampling
     
     console.log('Starting global ellipse search...')
     
@@ -713,10 +700,9 @@ function App() {
     
     // Generate points along the best circle
     const points = []
-    const numPoints = 100
     
-    for (let i = 0; i < numPoints; i++) {
-      const t = (2 * Math.PI * i) / numPoints
+    for (let i = 0; i < NUM_SAMPLES; i++) {
+      const t = (2 * Math.PI * i) / NUM_SAMPLES
       const x = bestCenter.x + bestRadius * Math.cos(t)
       const y = bestCenter.y + bestRadius * Math.sin(t)
       
@@ -730,7 +716,8 @@ function App() {
     return {
       points: points,
       center: bestCenter,
-      radius: bestRadius
+      radius: bestRadius,
+      numSamples: NUM_SAMPLES
     }
   }
 
@@ -739,8 +726,7 @@ function App() {
     const cv = window.cv
     const beads = []
     
-    const { points, center, radius } = curveData
-    const numSamples = 100
+    const { points, center, radius, numSamples } = curveData
     const maxPerpendicularDistance = radius * 0.3 // 30% of radius
     
     console.log(`Sampling ${numSamples} points along ellipse with radius ${radius.toFixed(1)}`)
@@ -751,6 +737,7 @@ function App() {
       const ellipseY = center.y + radius * Math.sin(t)
       
       // Calculate perpendicular direction (tangent is (-sin(t), cos(t)), so perpendicular is (cos(t), sin(t)))
+      // For a circle, the perpendicular direction is the same as the radial direction
       const perpX = Math.cos(t)
       const perpY = Math.sin(t)
       
@@ -771,7 +758,7 @@ function App() {
         if (xInt >= 0 && xInt < width && yInt >= 0 && yInt < height) {
           // Check if point is above density threshold
           const densityValue = densityMap.ucharPtr(yInt, xInt)[0]
-          if (densityValue > 127) { // Above threshold
+          if (densityValue > 50) { // Lower threshold to catch more colors
             // Sample color at this point
             const idx = (yInt * width + xInt) * 4
             const r = data[idx]
@@ -805,10 +792,20 @@ function App() {
           angle: t,
           perpDistance: bestDistance
         })
+      } else {
+        // Debug: log when no color is found
+        console.log(`No color found at angle ${(t * 180 / Math.PI).toFixed(1)}°, density threshold may be too high`)
       }
     }
     
     console.log(`Found ${beads.length} beads along ellipse`)
+    
+    // Debug: log some sample colors
+    for (let i = 0; i < Math.min(10, beads.length); i++) {
+      const bead = beads[i]
+      console.log(`Bead ${i}: ${bead.hex} (RGB: ${bead.color.join(',')}) vibrancy: ${bead.vibrancy.toFixed(3)}`)
+    }
+    
     return beads
   }
 
