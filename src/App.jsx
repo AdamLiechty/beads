@@ -185,6 +185,7 @@ function App() {
 
     // Draw density mask as translucent overlay if available
     if (densityMask) {
+      console.log('Drawing density mask overlay')
       const imageData = ctx.createImageData(displayRect.width, displayRect.height)
       
       for (let y = 0; y < displayRect.height; y++) {
@@ -198,18 +199,14 @@ function App() {
           if (origX >= 0 && origX < imageWidth && origY >= 0 && origY < imageHeight) {
             const densityValue = densityMask.ucharPtr(origY, origX)[0]
             
-            // Create a red translucent overlay for white regions
-            if (densityValue > 127) {
-              imageData.data[idx] = 255     // Red
-              imageData.data[idx + 1] = 0   // Green
-              imageData.data[idx + 2] = 0   // Blue
-              imageData.data[idx + 3] = 80  // Alpha (translucent)
-            } else {
-              imageData.data[idx] = 0
-              imageData.data[idx + 1] = 0
-              imageData.data[idx + 2] = 0
-              imageData.data[idx + 3] = 0
-            }
+            // Create overlay: black with alpha based on density (higher density = lower alpha)
+            const normalizedDensity = densityValue / 255 // Convert to 0-1 range
+            const alpha = Math.round((1 - normalizedDensity) * 255) // Invert so higher density = lower alpha
+            
+            imageData.data[idx] = 0      // Black
+            imageData.data[idx + 1] = 0  // Black
+            imageData.data[idx + 2] = 0  // Black
+            imageData.data[idx + 3] = alpha
           } else {
             imageData.data[idx] = 0
             imageData.data[idx + 1] = 0
@@ -221,14 +218,6 @@ function App() {
       
       ctx.putImageData(imageData, 0, 0)
     }
-
-    // Draw a test line to verify canvas is working
-    ctx.strokeStyle = '#FF0000'
-    ctx.lineWidth = 5
-    ctx.beginPath()
-    ctx.moveTo(10, 10)
-    ctx.lineTo(100, 100)
-    ctx.stroke()
 
     // Draw bracelet curve if available
     if (braceletCurve && braceletCurve.length > 0) {
@@ -288,6 +277,8 @@ function App() {
     } else {
       console.log('No bracelet curve to draw')
     }
+    
+    console.log('Overlay drawing complete')
 
     beads.forEach((bead, index) => {
       // Scale the coordinates to match the displayed image
@@ -614,18 +605,19 @@ function App() {
       cv.drawContours(braceletMask, braceletContourVector, 0, new cv.Scalar(255), -1)
       
       // Find the bracelet curve path
-      const braceletCurve = extractBraceletCurve(bestBraceletContour, width, height, finalDensityMask)
+      const braceletCurve = extractBraceletCurve(bestBraceletContour, width, height, finalDensityMap)
       console.log(`Bracelet curve extracted: ${braceletCurve ? braceletCurve.length : 0} points`)
       
-      // Find beads along the bracelet curve
-      const beads = findBeadsAlongCurve(data, width, height, braceletMask, braceletCurve)
+      // DISABLED: Find beads along the bracelet curve
+      // const beads = findBeadsAlongCurve(data, width, height, braceletMask, braceletCurve)
+      const beads = [] // Empty array for now
       
       // Store bracelet curve for visualization
       setBraceletCurve(braceletCurve)
       console.log(`Bracelet curve stored for visualization: ${braceletCurve ? braceletCurve.length : 0} points`)
       
-      // Clone the density mask before cleanup
-      const densityMaskClone = finalDensityMask.clone()
+      // Clone the density map before cleanup
+      const densityMapClone = finalDensityMap.clone()
       
       // Clean up OpenCV objects
       src.delete()
@@ -646,7 +638,7 @@ function App() {
       braceletContourVector.delete()
       
       console.log(`Found ${beads.length} beads along the bracelet curve`)
-      return { beads, densityMask: densityMaskClone }
+      return { beads, densityMask: densityMapClone }
       
     } catch (error) {
       console.error('Error in OpenCV detection:', error)
@@ -654,47 +646,29 @@ function App() {
     }
   }
 
-  // Extract the bracelet curve path using ellipse fitting
+  // Extract the bracelet curve path using global ellipse search
   const extractBraceletCurve = (contour, width, height, densityMask) => {
     const cv = window.cv
     
-    // Get the fitted ellipse as a starting point
-    const fittedEllipse = cv.fitEllipse(contour)
-    console.log(`Initial fitted ellipse: center=(${fittedEllipse.center.x.toFixed(1)}, ${fittedEllipse.center.y.toFixed(1)}), axes=(${fittedEllipse.size.width.toFixed(1)}, ${fittedEllipse.size.height.toFixed(1)}), angle=${fittedEllipse.angle.toFixed(1)}°`)
+    console.log('Starting global ellipse search...')
     
-    // Function to evaluate ellipse boundary coverage of white regions
-    const evaluateEllipseCoverage = (ellipse) => {
-      const centerX = ellipse.center.x
-      const centerY = ellipse.center.y
-      const majorAxis = Math.max(ellipse.size.width, ellipse.size.height) / 2
-      const minorAxis = Math.min(ellipse.size.width, ellipse.size.height) / 2
-      const angleRad = (ellipse.angle * Math.PI) / 180
-      const isMajorHorizontal = ellipse.size.width > ellipse.size.height
-      
-      // Check if ellipse is within image bounds
-      const maxRadius = Math.max(majorAxis, minorAxis)
-      if (centerX - maxRadius < 0 || centerX + maxRadius >= width || 
-          centerY - maxRadius < 0 || centerY + maxRadius >= height) {
-        return 0 // Ellipse outside bounds
+    // Function to evaluate ellipse boundary density sum
+    const evaluateEllipseDensity = (centerX, centerY, radius) => {
+      // Check if circle is within image bounds
+      if (centerX - radius < 0 || centerX + radius >= width || 
+          centerY - radius < 0 || centerY + radius >= height) {
+        return 0 // Circle outside bounds
       }
       
-      // Sample points ON the ellipse boundary
-      const numPoints = 100 // More points for better coverage
-      let whitePoints = 0
+      // Sample points ON the circle boundary
+      const numPoints = 200 // More points for better coverage
+      let totalDensity = 0
       let totalPoints = 0
       
       for (let i = 0; i < numPoints; i++) {
         const t = (2 * Math.PI * i) / numPoints
-        
-        // Parametric ellipse equations for points ON the boundary
-        let x, y
-        if (isMajorHorizontal) {
-          x = centerX + majorAxis * Math.cos(t) * Math.cos(angleRad) - minorAxis * Math.sin(t) * Math.sin(angleRad)
-          y = centerY + majorAxis * Math.cos(t) * Math.sin(angleRad) + minorAxis * Math.sin(t) * Math.cos(angleRad)
-        } else {
-          x = centerX + minorAxis * Math.cos(t) * Math.cos(angleRad) - majorAxis * Math.sin(t) * Math.sin(angleRad)
-          y = centerY + minorAxis * Math.cos(t) * Math.sin(angleRad) + majorAxis * Math.sin(t) * Math.cos(angleRad)
-        }
+        const x = centerX + radius * Math.cos(t)
+        const y = centerY + radius * Math.sin(t)
         
         const xInt = Math.round(x)
         const yInt = Math.round(y)
@@ -702,114 +676,85 @@ function App() {
         if (xInt >= 0 && xInt < width && yInt >= 0 && yInt < height) {
           totalPoints++
           const pixelValue = densityMask.ucharPtr(yInt, xInt)[0]
-          if (pixelValue > 127) { // White region
-            whitePoints++
+          totalDensity += pixelValue / 255 // Normalize to 0-1 range
+        }
+      }
+      
+      return totalPoints > 0 ? totalDensity / totalPoints : 0 // Return average density
+    }
+    
+    // Find high-density regions to use as starting points
+    const highDensityPoints = []
+    const step = 10 // Sample every 10 pixels
+    
+    for (let y = step; y < height - step; y += step) {
+      for (let x = step; x < width - step; x += step) {
+        const pixelValue = densityMask.ucharPtr(y, x)[0]
+        const normalizedDensity = pixelValue / 255 // Convert to 0-1 range
+        if (normalizedDensity > 0.3) { // Threshold for "high density" regions
+          highDensityPoints.push({ x, y, density: normalizedDensity })
+        }
+      }
+    }
+    
+    console.log(`Found ${highDensityPoints.length} high-density points`)
+    
+    // Sort by density and take top candidates
+    highDensityPoints.sort((a, b) => b.density - a.density)
+    const candidateCenters = highDensityPoints.slice(0, 20) // Top 20 density points
+    
+    let bestCenter = { x: width / 2, y: height / 2 }
+    let bestRadius = Math.min(width, height) * 0.2
+    let bestCoverage = 0
+    
+    console.log('Searching for best circle...')
+    
+    // Try different centers from high-density regions
+    for (const candidate of candidateCenters) {
+      // Try different radii for this center
+      const minRadius = Math.min(width, height) * 0.1
+      const maxRadius = Math.min(width, height) * 0.4
+      const radiusStep = Math.min(width, height) * 0.01
+      
+      for (let radius = minRadius; radius <= maxRadius; radius += radiusStep) {
+        const density = evaluateEllipseDensity(candidate.x, candidate.y, radius)
+        if (density > bestCoverage) {
+          bestCoverage = density
+          bestCenter = { x: candidate.x, y: candidate.y }
+          bestRadius = radius
+        }
+      }
+    }
+    
+    // Also try a grid search across the entire image
+    const gridStep = Math.min(width, height) * 0.02
+    for (let y = gridStep; y < height - gridStep; y += gridStep) {
+      for (let x = gridStep; x < width - gridStep; x += gridStep) {
+        const minRadius = Math.min(width, height) * 0.1
+        const maxRadius = Math.min(width, height) * 0.4
+        const radiusStep = Math.min(width, height) * 0.01
+        
+        for (let radius = minRadius; radius <= maxRadius; radius += radiusStep) {
+          const density = evaluateEllipseDensity(x, y, radius)
+          if (density > bestCoverage) {
+            bestCoverage = density
+            bestCenter = { x, y }
+            bestRadius = radius
           }
         }
       }
-      
-      return totalPoints > 0 ? whitePoints / totalPoints : 0
     }
     
-    // Search for better ellipse parameters
-    let bestEllipse = fittedEllipse
-    let bestCoverage = evaluateEllipseCoverage(fittedEllipse)
-    console.log(`Initial coverage: ${(bestCoverage * 100).toFixed(1)}%`)
+    console.log(`Best circle found: center=(${bestCenter.x.toFixed(1)}, ${bestCenter.y.toFixed(1)}), radius=${bestRadius.toFixed(1)}, average density: ${(bestCoverage * 100).toFixed(1)}%`)
     
-    // Try different center positions within the image
-    const centerSearchRadius = Math.min(width, height) * 0.2
-    const centerStep = Math.min(width, height) * 0.005 // Finer search
-    
-    for (let dx = -centerSearchRadius; dx <= centerSearchRadius; dx += centerStep) {
-      for (let dy = -centerSearchRadius; dy <= centerSearchRadius; dy += centerStep) {
-        const testCenterX = fittedEllipse.center.x + dx
-        const testCenterY = fittedEllipse.center.y + dy
-        
-        // Ensure center is within image bounds
-        if (testCenterX < 0 || testCenterX >= width || testCenterY < 0 || testCenterY >= height) {
-          continue
-        }
-        
-        const testEllipse = {
-          center: { x: testCenterX, y: testCenterY },
-          size: fittedEllipse.size,
-          angle: fittedEllipse.angle
-        }
-        
-        const coverage = evaluateEllipseCoverage(testEllipse)
-        if (coverage > bestCoverage) {
-          bestCoverage = coverage
-          bestEllipse = testEllipse
-        }
-      }
-    }
-    
-    // Try different sizes, focusing on circular shapes
-    const sizeRange = 0.6 // ±60% size variation
-    const sizeStep = 0.01 // Finer size search
-    
-    for (let scale = 0.4; scale <= 1.6; scale += sizeStep) {
-      // Try circular shapes (same width and height)
-      const testEllipse = {
-        center: bestEllipse.center,
-        size: { 
-          width: fittedEllipse.size.width * scale, 
-          height: fittedEllipse.size.height * scale 
-        },
-        angle: fittedEllipse.angle
-      }
-      
-      const coverage = evaluateEllipseCoverage(testEllipse)
-      if (coverage > bestCoverage) {
-        bestCoverage = coverage
-        bestEllipse = testEllipse
-      }
-    }
-    
-    // Also try some elliptical variations
-    for (let scaleX = 0.6; scaleX <= 1.4; scaleX += 0.02) {
-      for (let scaleY = 0.6; scaleY <= 1.4; scaleY += 0.02) {
-        const testEllipse = {
-          center: bestEllipse.center,
-          size: { 
-            width: fittedEllipse.size.width * scaleX, 
-            height: fittedEllipse.size.height * scaleY 
-          },
-          angle: fittedEllipse.angle
-        }
-        
-        const coverage = evaluateEllipseCoverage(testEllipse)
-        if (coverage > bestCoverage) {
-          bestCoverage = coverage
-          bestEllipse = testEllipse
-        }
-      }
-    }
-    
-    console.log(`Best ellipse found: center=(${bestEllipse.center.x.toFixed(1)}, ${bestEllipse.center.y.toFixed(1)}), axes=(${bestEllipse.size.width.toFixed(1)}, ${bestEllipse.size.height.toFixed(1)}), angle=${bestEllipse.angle.toFixed(1)}°, coverage: ${(bestCoverage * 100).toFixed(1)}%`)
-    
-    // Generate points along the best ellipse
+    // Generate points along the best circle
     const points = []
-    const numPoints = 100 // Number of points to generate
-    const centerX = bestEllipse.center.x
-    const centerY = bestEllipse.center.y
-    const majorAxis = Math.max(bestEllipse.size.width, bestEllipse.size.height) / 2
-    const minorAxis = Math.min(bestEllipse.size.width, bestEllipse.size.height) / 2
-    const angleRad = (bestEllipse.angle * Math.PI) / 180
-    const isMajorHorizontal = bestEllipse.size.width > bestEllipse.size.height
+    const numPoints = 100
     
     for (let i = 0; i < numPoints; i++) {
       const t = (2 * Math.PI * i) / numPoints
-      
-      // Parametric ellipse equations
-      let x, y
-      if (isMajorHorizontal) {
-        x = centerX + majorAxis * Math.cos(t) * Math.cos(angleRad) - minorAxis * Math.sin(t) * Math.sin(angleRad)
-        y = centerY + majorAxis * Math.cos(t) * Math.sin(angleRad) + minorAxis * Math.sin(t) * Math.cos(angleRad)
-      } else {
-        x = centerX + minorAxis * Math.cos(t) * Math.cos(angleRad) - majorAxis * Math.sin(t) * Math.sin(angleRad)
-        y = centerY + minorAxis * Math.cos(t) * Math.sin(angleRad) + majorAxis * Math.sin(t) * Math.cos(angleRad)
-      }
+      const x = bestCenter.x + bestRadius * Math.cos(t)
+      const y = bestCenter.y + bestRadius * Math.sin(t)
       
       points.push({
         x: Math.round(x),
@@ -817,7 +762,7 @@ function App() {
       })
     }
     
-    console.log(`Generated ${points.length} points along optimized ellipse`)
+    console.log(`Generated ${points.length} points along best circle`)
     return points
   }
 
@@ -1163,7 +1108,7 @@ function App() {
             <canvas
               ref={overlayCanvasRef}
               className="overlay-canvas"
-              style={{ display: isCameraActive && detectedBeads.length > 0 ? 'block' : 'none' }}
+              style={{ display: isCameraActive ? 'block' : 'none' }}
             />
           </div>
           <canvas
