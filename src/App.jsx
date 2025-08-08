@@ -947,7 +947,7 @@ function App() {
       return false
     }
     
-    // Group samples into beads
+    // Group samples into beads by comparing adjacent samples
     const groups = []
     const used = new Set()
     
@@ -957,30 +957,27 @@ function App() {
       const currentGroup = [i]
       used.add(i)
       
-      // Find adjacent samples with similar colors
-      for (let j = 0; j < colorSamples.length; j++) {
-        if (used.has(j)) continue
-        
+      // Check forward: compare current sample with next samples
+      let j = i + 1
+      while (j < colorSamples.length && !used.has(j)) {
         const sample1 = colorSamples[i]
         const sample2 = colorSamples[j]
         
-        // Check if samples are adjacent (within reasonable distance)
-        const dx = sample1.centerX - sample2.centerX
-        const dy = sample1.centerY - sample2.centerY
-        const distance = Math.sqrt(dx * dx + dy * dy)
+        // Check color similarity
+        const colorDiff = colorDistance(sample1.color, sample2.color)
+        console.log(`Color diff ${j}: ${colorDiff}, sample1: ${sample1.hex}, sample2: ${sample2.hex}`)
         
-        if (distance < 30) { // Adjacent threshold
-          // Check color similarity
-          const colorDiff = colorDistance(sample1.color, sample2.color)
-          console.log(`Color diff ${j}: ${colorDiff}, sample1: ${sample1.hex}, sample2: ${sample2.hex}`)
-          
-          if (colorDiff < 40) { // Color similarity threshold
-            // Check if there's an edge between them
-            if (!hasEdgeBetween(sample1, sample2)) {
-              currentGroup.push(j)
-              used.add(j)
-            }
+        if (colorDiff < 40) { // Color similarity threshold
+          // Check if there's an edge between them
+          if (!hasEdgeBetween(sample1, sample2)) {
+            currentGroup.push(j)
+            used.add(j)
+            j++ // Move to next sample
+          } else {
+            break // Edge detected, stop grouping
           }
+        } else {
+          break // Color too different, stop grouping
         }
       }
       
