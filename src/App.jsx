@@ -221,35 +221,22 @@ function App() {
       ctx.putImageData(densityImageData, 0, 0)
     }
 
-    // Draw color samples as line segments
+    // Draw color samples as small black dots
     if (colorSamples && colorSamples.length > 0) {
       console.log(`Drawing ${colorSamples.length} color samples`)
       
-      // Draw colored line segments for all samples
-      ctx.lineWidth = 4 // Thinner lines for samples
-      ctx.setLineDash([]) // No dash
+      // Draw small black dots for all samples
+      ctx.fillStyle = 'black'
       
       for (let i = 0; i < colorSamples.length; i++) {
         const sample = colorSamples[i]
         const x = sample.centerX * scaleX
         const y = sample.centerY * scaleY
         
-        // Use the sampled color from the image
-        ctx.strokeStyle = sample.hex
-        
-        // Draw a short line segment at the sample position
-        const segmentLength = 8
-        
-        // Calculate perpendicular direction for the line segment
-        const angle = sample.angle
-        const perpX = Math.cos(angle)
-        const perpY = Math.sin(angle)
-        
-        // Draw line segment perpendicular to the ellipse
+        // Draw a small black dot at the sample position
         ctx.beginPath()
-        ctx.moveTo(x - perpX * segmentLength/2, y - perpY * segmentLength/2)
-        ctx.lineTo(x + perpX * segmentLength/2, y + perpY * segmentLength/2)
-        ctx.stroke()
+        ctx.arc(x, y, 1, 0, 2 * Math.PI) // 2px diameter (1px radius)
+        ctx.fill()
       }
     }
 
@@ -868,11 +855,67 @@ function App() {
     
     console.log(`Grouping ${colorSamples.length} color samples into beads`)
     
-    // Function to calculate color distance
+    // Function to calculate color distance with brightness normalization
     const colorDistance = (color1, color2) => {
-      const dr = color1[0] - color2[0]
-      const dg = color1[1] - color2[1]
-      const db = color1[2] - color2[2]
+      // Helper function to convert RGB to HSV
+      const rgbToHsv = (r, g, b) => {
+        r /= 255
+        g /= 255
+        b /= 255
+        
+        const max = Math.max(r, g, b)
+        const min = Math.min(r, g, b)
+        const diff = max - min
+        
+        let h = 0
+        if (diff !== 0) {
+          if (max === r) h = ((g - b) / diff) % 6
+          else if (max === g) h = (b - r) / diff + 2
+          else h = (r - g) / diff + 4
+        }
+        h = Math.round(h * 60)
+        if (h < 0) h += 360
+        
+        const s = max === 0 ? 0 : diff / max
+        const v = max
+        
+        return [h, s, v]
+      }
+      
+      // Helper function to convert HSV to RGB
+      const hsvToRgb = (h, s, v) => {
+        const c = v * s
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+        const m = v - c
+        
+        let r = 0, g = 0, b = 0
+        if (h >= 0 && h < 60) { r = c; g = x; b = 0 }
+        else if (h >= 60 && h < 120) { r = x; g = c; b = 0 }
+        else if (h >= 120 && h < 180) { r = 0; g = c; b = x }
+        else if (h >= 180 && h < 240) { r = 0; g = x; b = c }
+        else if (h >= 240 && h < 300) { r = x; g = 0; b = c }
+        else if (h >= 300 && h < 360) { r = c; g = 0; b = x }
+        
+        return [(r + m) * 255, (g + m) * 255, (b + m) * 255]
+      }
+      
+      // Convert both colors to HSV
+      const hsv1 = rgbToHsv(color1[0], color1[1], color1[2])
+      const hsv2 = rgbToHsv(color2[0], color2[1], color2[2])
+      
+      // Normalize brightness to a common value (0.8) while preserving hue and saturation
+      const normalizedBrightness = 0.8
+      const normalizedHsv1 = [hsv1[0], hsv1[1], normalizedBrightness]
+      const normalizedHsv2 = [hsv2[0], hsv2[1], normalizedBrightness]
+      
+      // Convert back to RGB
+      const normalizedRgb1 = hsvToRgb(normalizedHsv1[0], normalizedHsv1[1], normalizedHsv1[2])
+      const normalizedRgb2 = hsvToRgb(normalizedHsv2[0], normalizedHsv2[1], normalizedHsv2[2])
+      
+      // Calculate distance using normalized colors
+      const dr = normalizedRgb1[0] - normalizedRgb2[0]
+      const dg = normalizedRgb1[1] - normalizedRgb2[1]
+      const db = normalizedRgb1[2] - normalizedRgb2[2]
       return Math.sqrt(dr * dr + dg * dg + db * db)
     }
     
@@ -929,6 +972,7 @@ function App() {
         if (distance < 30) { // Adjacent threshold
           // Check color similarity
           const colorDiff = colorDistance(sample1.color, sample2.color)
+          console.log(`Color diff ${j}: ${colorDiff}, sample1: ${sample1.hex}, sample2: ${sample2.hex}`)
           
           if (colorDiff < 40) { // Color similarity threshold
             // Check if there's an edge between them
