@@ -18,6 +18,7 @@ function App() {
   const [debugInfo, setDebugInfo] = useState('')
   const [opencvReady, setOpencvReady] = useState(false)
   const [braceletCurve, setBraceletCurve] = useState(null)
+  const hasRunTestDetectionRef = useRef(false)
 
   // Load OpenCV for browser (prevent duplicate loading)
   useEffect(() => {
@@ -135,6 +136,7 @@ function App() {
       setDetectedBeads([])
       setDebugInfo('')
       setBraceletCurve(null)
+      hasRunTestDetectionRef.current = false // Reset test detection flag
       clearOverlay()
       return
     }
@@ -1281,21 +1283,35 @@ function App() {
     }
   }
 
-  // Continuous detection
+  // Continuous detection (or single run in test mode)
   useEffect(() => {
     let interval
-    if (isCameraActive && !isProcessing && opencvReady) {
-      interval = setInterval(() => {
-        setIsProcessing(true)
-        detectBeads()
-        setTimeout(() => setIsProcessing(false), 100)
-      }, 500) // Detect every 500ms
+    
+    if (isCameraActive && opencvReady) {
+      if (isTestMode) {
+        // In test mode, run detection only once
+        if (!hasRunTestDetectionRef.current) {
+          hasRunTestDetectionRef.current = true
+          setIsProcessing(true)
+          detectBeads()
+          setTimeout(() => setIsProcessing(false), 100)
+        }
+      } else {
+        // In camera mode, run continuously
+        interval = setInterval(() => {
+          if (!isProcessing) {
+            setIsProcessing(true)
+            detectBeads()
+            setTimeout(() => setIsProcessing(false), 100)
+          }
+        }, 500) // Detect every 500ms
+      }
     }
 
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [isCameraActive, isProcessing, isTestMode, opencvReady])
+  }, [isCameraActive, isTestMode, opencvReady])
 
   return (
     <div className="App">
