@@ -175,6 +175,8 @@ function App() {
 
   // Draw bead markers and bracelet curve on overlay
   const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null, edges = null, colorSamples = null) => {
+    console.log(`Drawing overlay for processed image: ${imageWidth}x${imageHeight}`)
+    
     const overlayCanvas = overlayCanvasRef.current
     if (!overlayCanvas) return
 
@@ -186,9 +188,13 @@ function App() {
     const displayRect = imageElement.getBoundingClientRect()
     const containerRect = overlayCanvas.parentElement.getBoundingClientRect()
     
+    console.log(`Display dimensions: ${displayRect.width.toFixed(0)}x${displayRect.height.toFixed(0)}`)
+    
     // Calculate the scale factors
     const scaleX = displayRect.width / imageWidth
     const scaleY = displayRect.height / imageHeight
+    
+    console.log(`Scale factors: scaleX=${scaleX.toFixed(3)}, scaleY=${scaleY.toFixed(3)}`)
     
     // Set canvas size to match the displayed image size
     overlayCanvas.width = displayRect.width
@@ -286,7 +292,7 @@ function App() {
     // Draw edge detection lines on top of everything
     if (edges) {
       console.log('Drawing edge detection lines on top')
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)' // White with transparency
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.9)'
       ctx.lineWidth = 1
       
       // Draw edges as lines
@@ -1371,7 +1377,10 @@ function App() {
     setDetectedBeads(uniqueBeads)
     
     // Draw markers on overlay (pass both color samples and grouped beads)
-    drawBeadMarkers(uniqueBeads, width, height, braceletCurve, densityMask, edges, colorSamples)
+    // Use the actual processed canvas dimensions for the overlay
+    const processedWidth = canvas.width
+    const processedHeight = canvas.height
+    drawBeadMarkers(uniqueBeads, processedWidth, processedHeight, braceletCurve, densityMask, edges, colorSamples)
     
     // Clean up the density mask and edges after drawing
     if (densityMask) {
