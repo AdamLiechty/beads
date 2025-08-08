@@ -998,17 +998,18 @@ function App() {
         } else {
           // For specular highlights, we might want to be more lenient
           // If the edge is weak or the colors are very similar, continue grouping
-          if (colorDiff < 20) { // Very similar colors
-            console.log(`Continuing grouping despite edge - colors very similar (diff: ${colorDiff.toFixed(1)})`)
+          const colorDiffThresholdDespiteEdge = 20 * (8 / (currentGroup.length + 1))
+          if (colorDiff < colorDiffThresholdDespiteEdge) { // Very similar colors
+            console.log(`Continuing grouping despite edge - colors very similar (diff: ${colorDiff.toFixed(1)}) (threshold: ${colorDiffThresholdDespiteEdge.toFixed(1)})`)
             currentGroup.push(i + 1)
           } else {
-            // Edge detected and colors not similar enough, start a new group
+            console.log(`Edge detected and colors not similar enough, start a new group (diff: ${colorDiff.toFixed(1)})  (threshold: ${colorDiffThresholdDespiteEdge.toFixed(1)})`)
             groups.push(currentGroup)
             currentGroup = [i + 1]
           }
         }
       } else {
-        // Color too different, start a new group
+        console.log(`Color too different, start a new group (diff: ${colorDiff.toFixed(1)})`)
         groups.push(currentGroup)
         currentGroup = [i + 1]
       }
