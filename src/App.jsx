@@ -937,12 +937,12 @@ function App() {
         const x = Math.round(point1.centerX + i * stepX)
         const y = Math.round(point1.centerY + i * stepY)
         
-        if (x >= 0 && x < width && y >= 0 && y < height) {
-          const edgeValue = edges.ucharPtr(y, x)[0]
-          if (edgeValue > 100) { // Strong edge threshold
-            return true
+                  if (x >= 0 && x < width && y >= 0 && y < height) {
+            const edgeValue = edges.ucharPtr(y, x)[0]
+            if (edgeValue > 80) { // Slightly lower threshold to be more lenient with specular highlights
+              return true
+            }
           }
-        }
       }
       return false
     }
@@ -968,13 +968,23 @@ function App() {
         console.log(`Color diff ${j}: ${colorDiff}, sample1: ${sample1.hex}, sample2: ${sample2.hex}`)
         
         if (colorDiff < 40) { // Color similarity threshold
-          // Check if there's an edge between them
-          if (!hasEdgeBetween(sample1, sample2)) {
+          // Check if there's an edge between them (but be more lenient for specular highlights)
+          const hasEdge = hasEdgeBetween(sample1, sample2)
+          if (!hasEdge) {
             currentGroup.push(j)
             used.add(j)
             j++ // Move to next sample
           } else {
-            break // Edge detected, stop grouping
+            // For specular highlights, we might want to be more lenient
+            // If the edge is weak or the colors are very similar, continue grouping
+            if (colorDiff < 20) { // Very similar colors
+              console.log(`Continuing grouping despite edge - colors very similar (diff: ${colorDiff.toFixed(1)})`)
+              currentGroup.push(j)
+              used.add(j)
+              j++ // Move to next sample
+            } else {
+              break // Edge detected and colors not similar enough, stop grouping
+            }
           }
         } else {
           break // Color too different, stop grouping
