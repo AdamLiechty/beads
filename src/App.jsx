@@ -251,26 +251,7 @@ function App() {
       ctx.putImageData(densityImageData, 0, 0)
     }
 
-    // Draw color samples as small black dots
-    if (colorSamples && colorSamples.length > 0) {
-      console.log(`Drawing ${colorSamples.length} color samples`)
-      
-      // Draw small black dots for all samples
-      ctx.fillStyle = 'black'
-      
-      for (let i = 0; i < colorSamples.length; i++) {
-        const sample = colorSamples[i]
-        const x = sample.centerX * uniformScale + offsetX
-        const y = sample.centerY * uniformScale + offsetY
-        
-        // Draw a small black dot at the sample position
-        ctx.beginPath()
-        ctx.arc(x, y, 1, 0, 2 * Math.PI) // 2px diameter (1px radius)
-        ctx.fill()
-      }
-    }
-
-    // Draw grouped beads as circles
+    // Draw grouped beads as circles (first, so they appear behind the sample dots)
     if (beads && beads.length > 0) {
       console.log(`Drawing ${beads.length} grouped beads`)
       
@@ -299,6 +280,25 @@ function App() {
       }
       
       console.log('Grouped beads drawn')
+    }
+
+    // Draw color samples as small black dots (on top of bead circles)
+    if (colorSamples && colorSamples.length > 0) {
+      console.log(`Drawing ${colorSamples.length} color samples`)
+      
+      // Draw small black dots for all samples
+      ctx.fillStyle = 'black'
+      
+      for (let i = 0; i < colorSamples.length; i++) {
+        const sample = colorSamples[i]
+        const x = sample.centerX * uniformScale + offsetX
+        const y = sample.centerY * uniformScale + offsetY
+        
+        // Draw a small black dot at the sample position
+        ctx.beginPath()
+        ctx.arc(x, y, 1, 0, 2 * Math.PI) // 2px diameter (1px radius)
+        ctx.fill()
+      }
     }
 
     // Draw edge detection lines on top of everything
@@ -995,7 +995,7 @@ function App() {
         
         // Check color similarity
         const colorDiff = colorDistance(sample1.color, sample2.color)
-        console.log(`Color diff ${j}: ${colorDiff}, sample1: ${sample1.hex}, sample2: ${sample2.hex}`)
+        console.log(`Color diff ${i} ${j}: ${colorDiff}, %c${sample1.hex}, %c${sample2.hex}`, `color: #000; background: ${sample1.hex}`, `color: #000; background: ${sample2.hex}`)
         
         if (colorDiff < 40) { // Color similarity threshold
           // Check if there's an edge between them (but be more lenient for specular highlights)
