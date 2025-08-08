@@ -977,52 +977,45 @@ function App() {
       return false
     }
     
-    // Group samples into beads by comparing adjacent samples
+    // Group samples into beads by comparing each sample with the next one
     const groups = []
-    const used = new Set()
+    let currentGroup = [0] // Start with the first sample
     
-    for (let i = 0; i < colorSamples.length; i++) {
-      if (used.has(i)) continue
+    for (let i = 0; i < colorSamples.length - 1; i++) {
+      const sample1 = colorSamples[i]
+      const sample2 = colorSamples[i + 1]
       
-      const currentGroup = [i]
-      used.add(i)
+      // Check color similarity
+      const colorDiff = colorDistance(sample1.color, sample2.color)
+      console.log(`Color diff ${i} ${i+1}: ${colorDiff}, %c${sample1.hex}, %c${sample2.hex}`, `color: #000; background: ${sample1.hex}`, `color: #000; background: ${sample2.hex}`)
       
-      // Check forward: compare current sample with next samples
-      let j = i + 1
-      while (j < colorSamples.length && !used.has(j)) {
-        const sample1 = colorSamples[i]
-        const sample2 = colorSamples[j]
-        
-        // Check color similarity
-        const colorDiff = colorDistance(sample1.color, sample2.color)
-        console.log(`Color diff ${i} ${j}: ${colorDiff}, %c${sample1.hex}, %c${sample2.hex}`, `color: #000; background: ${sample1.hex}`, `color: #000; background: ${sample2.hex}`)
-        
-        if (colorDiff < 40) { // Color similarity threshold
-          // Check if there's an edge between them (but be more lenient for specular highlights)
-          const hasEdge = hasEdgeBetween(sample1, sample2)
-          if (!hasEdge) {
-            currentGroup.push(j)
-            used.add(j)
-            j++ // Move to next sample
-          } else {
-            // For specular highlights, we might want to be more lenient
-            // If the edge is weak or the colors are very similar, continue grouping
-            if (colorDiff < 20) { // Very similar colors
-              console.log(`Continuing grouping despite edge - colors very similar (diff: ${colorDiff.toFixed(1)})`)
-              currentGroup.push(j)
-              used.add(j)
-              j++ // Move to next sample
-            } else {
-              break // Edge detected and colors not similar enough, stop grouping
-            }
-          }
+      if (colorDiff < 40) { // Color similarity threshold
+        // Check if there's an edge between them (but be more lenient for specular highlights)
+        const hasEdge = hasEdgeBetween(sample1, sample2)
+        if (!hasEdge) {
+          // Add the next sample to the current group
+          currentGroup.push(i + 1)
         } else {
-          break // Color too different, stop grouping
+          // For specular highlights, we might want to be more lenient
+          // If the edge is weak or the colors are very similar, continue grouping
+          if (colorDiff < 20) { // Very similar colors
+            console.log(`Continuing grouping despite edge - colors very similar (diff: ${colorDiff.toFixed(1)})`)
+            currentGroup.push(i + 1)
+          } else {
+            // Edge detected and colors not similar enough, start a new group
+            groups.push(currentGroup)
+            currentGroup = [i + 1]
+          }
         }
+      } else {
+        // Color too different, start a new group
+        groups.push(currentGroup)
+        currentGroup = [i + 1]
       }
-      
-      groups.push(currentGroup)
     }
+    
+    // Don't forget to add the last group
+    groups.push(currentGroup)
     
     console.log(`Grouped ${colorSamples.length} samples into ${groups.length} potential beads`)
     
