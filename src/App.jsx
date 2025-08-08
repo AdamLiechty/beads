@@ -196,6 +196,18 @@ function App() {
     
     console.log(`Scale factors: scaleX=${scaleX.toFixed(3)}, scaleY=${scaleY.toFixed(3)}`)
     
+    // Use uniform scaling to prevent stretching
+    const uniformScale = Math.min(scaleX, scaleY)
+    console.log(`Using uniform scale: ${uniformScale.toFixed(3)}`)
+    
+    // Calculate the centered position for the overlay
+    const overlayWidth = imageWidth * uniformScale
+    const overlayHeight = imageHeight * uniformScale
+    const offsetX = (displayRect.width - overlayWidth) / 2
+    const offsetY = (displayRect.height - overlayHeight) / 2
+    
+    console.log(`Overlay dimensions: ${overlayWidth.toFixed(0)}x${overlayHeight.toFixed(0)}, offset: (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)})`)
+    
     // Set canvas size to match the displayed image size
     overlayCanvas.width = displayRect.width
     overlayCanvas.height = displayRect.height
@@ -213,8 +225,8 @@ function App() {
           const idx = (y * displayRect.width + x) * 4
           
           // Map display coordinates back to original image coordinates
-          const origX = Math.floor(x / scaleX)
-          const origY = Math.floor(y / scaleY)
+          const origX = Math.floor((x - offsetX) / uniformScale)
+          const origY = Math.floor((y - offsetY) / uniformScale)
           
           if (origX >= 0 && origX < imageWidth && origY >= 0 && origY < imageHeight) {
             const densityValue = densityMask.ucharPtr(origY, origX)[0]
@@ -248,8 +260,8 @@ function App() {
       
       for (let i = 0; i < colorSamples.length; i++) {
         const sample = colorSamples[i]
-        const x = sample.centerX * scaleX
-        const y = sample.centerY * scaleY
+        const x = sample.centerX * uniformScale + offsetX
+        const y = sample.centerY * uniformScale + offsetY
         
         // Draw a small black dot at the sample position
         ctx.beginPath()
@@ -264,9 +276,9 @@ function App() {
       
       for (let i = 0; i < beads.length; i++) {
         const bead = beads[i]
-        const x = bead.centerX * scaleX
-        const y = bead.centerY * scaleY
-        const radius = (bead.radius || 10) * Math.min(scaleX, scaleY)
+        const x = bead.centerX * uniformScale + offsetX
+        const y = bead.centerY * uniformScale + offsetY
+        const radius = (bead.radius || 10) * uniformScale
         
         // Draw bead circle with color
         ctx.fillStyle = bead.hex
@@ -300,8 +312,8 @@ function App() {
         for (let x = 0; x < imageWidth; x += 2) {
           const edgeValue = edges.ucharPtr(y, x)[0]
           if (edgeValue > 0) {
-            const screenX = x * scaleX
-            const screenY = y * scaleY
+            const screenX = x * uniformScale + offsetX
+            const screenY = y * uniformScale + offsetY
             
             ctx.beginPath()
             ctx.arc(screenX, screenY, 0.5, 0, 2 * Math.PI)
