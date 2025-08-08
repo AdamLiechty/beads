@@ -19,6 +19,7 @@ function App() {
   const [opencvReady, setOpencvReady] = useState(false)
   const [braceletCurve, setBraceletCurve] = useState(null)
   const hasRunTestDetectionRef = useRef(false)
+  const [showDetectButton, setShowDetectButton] = useState(false)
 
   // Load OpenCV for browser (prevent duplicate loading)
   useEffect(() => {
@@ -122,6 +123,7 @@ function App() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         setIsCameraActive(true)
+        setShowDetectButton(true) // Show detect button when camera is active
       }
     } catch (error) {
       console.error('Error accessing camera:', error)
@@ -145,6 +147,7 @@ function App() {
       const tracks = videoRef.current.srcObject.getTracks()
       tracks.forEach(track => track.stop())
       setIsCameraActive(false)
+      setShowDetectButton(false) // Hide detect button when camera is stopped
       setDetectedBeads([])
       setDebugInfo('')
       setBraceletCurve(null)
@@ -158,6 +161,15 @@ function App() {
     if (overlayCanvas) {
       const ctx = overlayCanvas.getContext('2d')
       ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
+    }
+  }
+
+  // Handle detect beads button click
+  const handleDetectBeads = () => {
+    if (!isProcessing && opencvReady) {
+      setIsProcessing(true)
+      detectBeads()
+      setTimeout(() => setIsProcessing(false), 100)
     }
   }
 
@@ -1240,16 +1252,52 @@ function App() {
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
 
+    // Target processing resolution
+    const targetWidth = 640
+    const targetHeight = 480
+
     if (isTestMode && imageRef.current) {
       // Use test image
-      canvas.width = imageRef.current.naturalWidth
-      canvas.height = imageRef.current.naturalHeight
+      const originalWidth = imageRef.current.naturalWidth
+      const originalHeight = imageRef.current.naturalHeight
+      
+      // Check if downscaling is needed
+      if (originalWidth > targetWidth || originalHeight > targetHeight) {
+        // Calculate scale to fit within target dimensions while maintaining aspect ratio
+        const scaleX = targetWidth / originalWidth
+        const scaleY = targetHeight / originalHeight
+        const scale = Math.min(scaleX, scaleY)
+        
+        canvas.width = Math.round(originalWidth * scale)
+        canvas.height = Math.round(originalHeight * scale)
+        console.log(`Downscaling test image from ${originalWidth}x${originalHeight} to ${canvas.width}x${canvas.height}`)
+      } else {
+        canvas.width = originalWidth
+        canvas.height = originalHeight
+      }
+      
       ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height)
     } else if (videoRef.current) {
       // Use camera feed
       const video = videoRef.current
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
+      const originalWidth = video.videoWidth
+      const originalHeight = video.videoHeight
+      
+      // Check if downscaling is needed
+      if (originalWidth > targetWidth || originalHeight > targetHeight) {
+        // Calculate scale to fit within target dimensions while maintaining aspect ratio
+        const scaleX = targetWidth / originalWidth
+        const scaleY = targetHeight / originalHeight
+        const scale = Math.min(scaleX, scaleY)
+        
+        canvas.width = Math.round(originalWidth * scale)
+        canvas.height = Math.round(originalHeight * scale)
+        console.log(`Downscaling camera feed from ${originalWidth}x${originalHeight} to ${canvas.width}x${canvas.height}`)
+      } else {
+        canvas.width = originalWidth
+        canvas.height = originalHeight
+      }
+      
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     } else {
       return
@@ -1334,33 +1382,16 @@ function App() {
     }
   }
 
-  // Continuous detection (or single run in test mode)
+  // Single detection run in test mode
   useEffect(() => {
-    let interval
-    
-    if (isCameraActive && opencvReady) {
-      if (isTestMode) {
-        // In test mode, run detection only once
-        if (!hasRunTestDetectionRef.current) {
-          hasRunTestDetectionRef.current = true
-          setIsProcessing(true)
-          detectBeads()
-          setTimeout(() => setIsProcessing(false), 100)
-        }
-      } else {
-        // In camera mode, run continuously
-        interval = setInterval(() => {
-          if (!isProcessing) {
-            setIsProcessing(true)
-            detectBeads()
-            setTimeout(() => setIsProcessing(false), 100)
-          }
-        }, 500) // Detect every 500ms
+    if (isCameraActive && opencvReady && isTestMode) {
+      // In test mode, run detection only once
+      if (!hasRunTestDetectionRef.current) {
+        hasRunTestDetectionRef.current = true
+        setIsProcessing(true)
+        detectBeads()
+        setTimeout(() => setIsProcessing(false), 100)
       }
-    }
-
-    return () => {
-      if (interval) clearInterval(interval)
     }
   }, [isCameraActive, isTestMode, opencvReady])
 
@@ -1374,9 +1405,20 @@ function App() {
               {isTestMode ? 'Start Detection' : 'Start Camera'}
             </button>
           ) : (
-            <button onClick={stopCamera} className="stop-btn">
-              {isTestMode ? 'Stop Detection' : 'Stop Camera'}
-            </button>
+            <div className="camera-buttons">
+              <button onClick={stopCamera} className="stop-btn">
+                {isTestMode ? 'Stop Detection' : 'Stop Camera'}
+              </button>
+              {!isTestMode && showDetectButton && (
+                <button 
+                  onClick={handleDetectBeads} 
+                  className="detect-btn"
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? 'Detecting...' : 'Detect Beads'}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </header>
