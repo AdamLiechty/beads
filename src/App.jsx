@@ -868,7 +868,7 @@ function App() {
       }
     }
     
-    console.log(`Found ${beads.length} beads along ellipse`)
+    console.log(`Found ${beads.length} samples along ellipse`)
     
     // Debug: log some sample colors
     for (let i = 0; i < Math.min(10, beads.length); i++) {
