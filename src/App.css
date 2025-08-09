@@ -174,8 +174,10 @@
 
 .beads-sequence {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .bead-item {
@@ -190,10 +192,30 @@
   position: relative;
 }
 
+.bead-item-compact {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  min-width: 60px;
+}
+
 .bead-item:hover {
   transform: translateY(-2px);
   background: rgba(255, 255, 255, 0.15);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.bead-item-compact:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .bead-number {
@@ -209,6 +231,17 @@
   font-size: 0.9rem;
   flex-shrink: 0;
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+}
+
+.bead-item-compact .bead-number {
+  width: 24px;
+  height: 24px;
+  font-size: 0.75rem;
+}
+
+.bead-item-compact .bead-swatch {
+  width: 40px;
+  height: 40px;
 }
 
 .bead-swatch {
@@ -310,6 +343,21 @@
     flex-direction: column;
     text-align: center;
     gap: 0.75rem;
+  }
+  
+  .bead-item-compact {
+    min-width: 50px;
+  }
+  
+  .bead-item-compact .bead-number {
+    width: 20px;
+    height: 20px;
+    font-size: 0.7rem;
+  }
+  
+  .bead-item-compact .bead-swatch {
+    width: 35px;
+    height: 35px;
   }
   
   .bead-swatch {

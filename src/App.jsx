@@ -1879,21 +1879,12 @@ function App() {
             <div className="beads-container">
               <div className="beads-sequence">
                 {detectedBeads.map((bead, index) => (
-                  <div key={index} className="bead-item">
+                  <div key={index} className="bead-item-compact">
                     <div className="bead-number">{index + 1}</div>
                     <div 
                       className="bead-swatch"
                       style={{ backgroundColor: bead.hex }}
                     />
-                    <div className="bead-info">
-                      <span className="hex-value">{bead.hex}</span>
-                      <span className="rgb-value">
-                        RGB({bead.color.join(', ')})
-                      </span>
-                      <span className="debug-details">
-                        Radius: {bead.radius.toFixed(1)}
-                      </span>
-                    </div>
                   </div>
                 ))}
               </div>
