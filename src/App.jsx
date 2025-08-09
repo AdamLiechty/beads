@@ -1285,13 +1285,36 @@ function App() {
       return false
     }
     
+    // Find optimal starting point with highest color distance between adjacent samples
+    let maxColorDiff = 0
+    let optimalStartIndex = 0
+    
+    for (let i = 0; i < colorSamples.length; i++) {
+      const currentSample = colorSamples[i]
+      const nextSample = colorSamples[(i + 1) % colorSamples.length] // Wrap around
+      
+      const colorDiff = colorDistance(currentSample.color, nextSample.color)
+      if (colorDiff > maxColorDiff) {
+        maxColorDiff = colorDiff
+        optimalStartIndex = (i + 1) % colorSamples.length // Start from the sample after the biggest transition
+      }
+    }
+    
+    console.log(`Optimal starting point found at index ${optimalStartIndex} with max color difference: ${maxColorDiff.toFixed(1)}`)
+    
+    // Reorder samples to start from optimal point
+    const reorderedSamples = [
+      ...colorSamples.slice(optimalStartIndex),
+      ...colorSamples.slice(0, optimalStartIndex)
+    ]
+    
     // Group samples into beads by comparing each sample with the next one
     const groups = []
-    let currentGroup = [0] // Start with the first sample
+    let currentGroup = [0] // Start with the first sample (now at optimal starting point)
     
-    for (let i = 0; i < colorSamples.length - 1; i++) {
-      const sample1 = colorSamples[i]
-      const sample2 = colorSamples[i + 1]
+    for (let i = 0; i < reorderedSamples.length - 1; i++) {
+      const sample1 = reorderedSamples[i]
+      const sample2 = reorderedSamples[i + 1]
       
       // Check color similarity
       const colorDiff = colorDistance(sample1.color, sample2.color)
@@ -1317,7 +1340,7 @@ function App() {
           }
         }
       } else {
-        console.log(`Color too different, start a new group (diff: ${colorDiff.toFixed(1)})`)
+        console.log(`Color too different or too many samples in current group, start a new group (diff: ${colorDiff.toFixed(1)})`)
         groups.push(currentGroup)
         currentGroup = [i + 1]
       }
@@ -1326,51 +1349,52 @@ function App() {
     // Don't forget to add the last group
     groups.push(currentGroup)
     
-    console.log(`Grouped ${colorSamples.length} samples into ${groups.length} potential beads`)
+    console.log(`Grouped ${reorderedSamples.length} samples into ${groups.length} potential beads (no wrap-around needed due to optimal starting point)`)
     
+    // No longer needed: wrap-around check is skipped since we start at optimal transition point
     // Check if the first and last groups should be combined (since they're adjacent on the ellipse)
-    if (groups.length >= 2) {
-      const firstGroup = groups[0]
-      const lastGroup = groups[groups.length - 1]
+    // if (groups.length >= 2) {
+    //   const firstGroup = groups[0]
+    //   const lastGroup = groups[groups.length - 1]
       
-      // Get the very first sample (index 0) and the very last sample (index 199)
-      const firstSample = colorSamples[0]
-      const lastSample = colorSamples[colorSamples.length - 1]
+    //   // Get the very first sample (index 0) and the very last sample (index 199)
+    //   const firstSample = colorSamples[0]
+    //   const lastSample = colorSamples[colorSamples.length - 1]
       
-      // Check if these adjacent samples should be grouped together
-      const colorDiff = colorDistance(firstSample.color, lastSample.color)
-      console.log(`Checking ellipse wrap-around: color diff 0 ${colorSamples.length - 1}: ${colorDiff}, %c${firstSample.hex}, %c${lastSample.hex}`, `color: #000; background: ${firstSample.hex}`, `color: #000; background: ${lastSample.hex}`)
+    //   // Check if these adjacent samples should be grouped together
+    //   const colorDiff = colorDistance(firstSample.color, lastSample.color)
+    //   console.log(`Checking ellipse wrap-around: color diff 0 ${colorSamples.length - 1}: ${colorDiff}, %c${firstSample.hex}, %c${lastSample.hex}`, `color: #000; background: ${firstSample.hex}`, `color: #000; background: ${lastSample.hex}`)
       
-      if (colorDiff < 40) { // Color similarity threshold
-        // Check if there's an edge between them
-        const hasEdge = hasEdgeBetween(firstSample, lastSample)
-        if (!hasEdge) {
-          console.log(`Combining first and last groups - similar colors and no edge`)
-          // Combine the groups by moving all samples from the last group to the first group
-          for (const sampleIndex of lastGroup) {
-            firstGroup.push(sampleIndex)
-          }
-          // Remove the last group
-          groups.pop()
-        } else {
-          // For specular highlights, be more lenient if colors are very similar
-          const colorDiffThresholdDespiteEdge = 20 * (8 / (firstGroup.length + lastGroup.length))
-          if (colorDiff < colorDiffThresholdDespiteEdge) {
-            console.log(`Combining first and last groups despite edge - colors very similar (diff: ${colorDiff.toFixed(1)}) (threshold: ${colorDiffThresholdDespiteEdge.toFixed(1)})`)
-            // Combine the groups
-            for (const sampleIndex of lastGroup) {
-              firstGroup.push(sampleIndex)
-            }
-            // Remove the last group
-            groups.pop()
-          } else {
-            console.log(`Not combining first and last groups - edge detected and colors not similar enough (diff: ${colorDiff.toFixed(1)}) (threshold: ${colorDiffThresholdDespiteEdge.toFixed(1)})`)
-          }
-        }
-      } else {
-        console.log(`Not combining first and last groups - colors too different (diff: ${colorDiff.toFixed(1)})`)
-      }
-    }
+    //   if (colorDiff < 40) { // Color similarity threshold
+    //     // Check if there's an edge between them
+    //     const hasEdge = hasEdgeBetween(firstSample, lastSample)
+    //     if (!hasEdge) {
+    //       console.log(`Combining first and last groups - similar colors and no edge`)
+    //       // Combine the groups by moving all samples from the last group to the first group
+    //       for (const sampleIndex of lastGroup) {
+    //         firstGroup.push(sampleIndex)
+    //       }
+    //       // Remove the last group
+    //       groups.pop()
+    //     } else {
+    //       // For specular highlights, be more lenient if colors are very similar
+    //       const colorDiffThresholdDespiteEdge = 20 * (8 / (firstGroup.length + lastGroup.length))
+    //       if (colorDiff < colorDiffThresholdDespiteEdge) {
+    //         console.log(`Combining first and last groups despite edge - colors very similar (diff: ${colorDiff.toFixed(1)}) (threshold: ${colorDiffThresholdDespiteEdge.toFixed(1)})`)
+    //         // Combine the groups
+    //         for (const sampleIndex of lastGroup) {
+    //           firstGroup.push(sampleIndex)
+    //         }
+    //         // Remove the last group
+    //         groups.pop()
+    //       } else {
+    //         console.log(`Not combining first and last groups - edge detected and colors not similar enough (diff: ${colorDiff.toFixed(1)}) (threshold: ${colorDiffThresholdDespiteEdge.toFixed(1)})`)
+    //       }
+    //     }
+    //   } else {
+    //     console.log(`Not combining first and last groups - colors too different (diff: ${colorDiff.toFixed(1)})`)
+    //   }
+    // }
     
     // Create bead objects from groups
     const beads = []
@@ -1385,7 +1409,7 @@ function App() {
         let totalVibrancy = 0
         
         for (const sampleIndex of group) {
-          const sample = colorSamples[sampleIndex]
+          const sample = reorderedSamples[sampleIndex]
           avgX += sample.centerX
           avgY += sample.centerY
           avgR += sample.color[0]
