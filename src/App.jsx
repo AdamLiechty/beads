@@ -282,19 +282,21 @@ function App() {
       console.log('Grouped beads drawn')
     }
 
-    // Draw color samples as small black dots (on top of bead circles)
+    // Draw color samples as small dots (on top of bead circles)
     if (colorSamples && colorSamples.length > 0) {
       console.log(`Drawing ${colorSamples.length} color samples`)
-      
-      // Draw small black dots for all samples
-      ctx.fillStyle = 'black'
       
       for (let i = 0; i < colorSamples.length; i++) {
         const sample = colorSamples[i]
         const x = sample.centerX * uniformScale + offsetX
         const y = sample.centerY * uniformScale + offsetY
         
-        // Draw a small black dot at the sample position
+        // Use bright green for black samples so they show up, black for everything else
+        const [r, g, b] = sample.color
+        const brightness = Math.max(r, g, b) / 255
+        const dotColor = brightness < 0.3 ? '#00FF00' : '#000000' // Bright green for dark samples
+        
+        ctx.fillStyle = dotColor
         ctx.beginPath()
         ctx.arc(x, y, 1, 0, 2 * Math.PI) // 2px diameter (1px radius)
         ctx.fill()
@@ -814,6 +816,10 @@ function App() {
       let bestColor = null
       let bestVibrancy = 0
       let bestDistance = 0
+      let hasColoredPixel = false
+      let bestColoredVibrancy = 0
+      let bestColoredColor = null
+      let bestColoredDistance = 0
       
       // Sample along perpendicular line segment
       const numPerpSamples = 20
@@ -835,20 +841,52 @@ function App() {
             const g = data[idx + 1]
             const b = data[idx + 2]
             
-            // Calculate color vibrancy (saturation + brightness)
+            // Calculate color vibrancy with special handling for white/black/gray
             const max = Math.max(r, g, b)
             const min = Math.min(r, g, b)
             const saturation = max === 0 ? 0 : (max - min) / max
+            const modifiedSaturation = (max - min) / Math.max(max, 60)
             const brightness = max / 255
-            const vibrancy = saturation * brightness
             
-            if (vibrancy > bestVibrancy) {
-              bestVibrancy = vibrancy
-              bestColor = [r, g, b]
-              bestDistance = perpDistance
+            // Check if this is a colored pixel (not white/black/gray)
+            if (modifiedSaturation >= 0.18) {
+              hasColoredPixel = true
+              const vibrancy = saturation * brightness
+              if (vibrancy > bestColoredVibrancy) {
+                bestColoredVibrancy = vibrancy
+                bestColoredColor = [r, g, b]
+                bestColoredDistance = perpDistance
+              }
+            } else {
+              // Only consider white/black if no colored pixels found yet
+              if (!hasColoredPixel) {
+                let score = 0
+                if (brightness > 0.8) {
+                  // Near white - use distance from pure white
+                  const distanceFromWhite = Math.sqrt((255-r)**2 + (255-g)**2 + (255-b)**2)
+                  score = 50 - distanceFromWhite
+                } else if (brightness < 0.2) {
+                  // Near black - use distance from pure black with slight bias
+                  const distanceFromBlack = Math.sqrt(r**2 + g**2 + b**2)
+                  score = 100 - distanceFromBlack // +5 bias toward black
+                }
+                
+                if (score > bestVibrancy) {
+                  bestVibrancy = score
+                  bestColor = [r, g, b]
+                  bestDistance = perpDistance
+                }
+              }
             }
           }
         }
+      }
+      
+      // If we found any colored pixels, use the best one regardless of white/black scores
+      if (hasColoredPixel) {
+        bestColor = bestColoredColor
+        bestVibrancy = bestColoredVibrancy
+        bestDistance = bestColoredDistance
       }
       
       if (bestColor) {
