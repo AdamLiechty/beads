@@ -1102,7 +1102,7 @@ function App() {
             const brightness = max / 255
             
             // Check if this is a colored pixel (not white/black/gray)
-            if (modifiedSaturation >= 0.5) {
+            if (modifiedSaturation >= 0.33) {
               hasColoredPixel = true
               const vibrancy = saturation * brightness
               if (vibrancy > bestColoredVibrancy) {
