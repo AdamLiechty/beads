@@ -926,6 +926,14 @@ function App() {
     
     // Function to calculate color distance with brightness normalization
     const colorDistance = (color1, color2) => {
+      // If both colors are very dark, return a high distance
+      if (color1[0] < 40 && color1[1] < 40 && color1[2] < 40 &&
+          color2[0] < 40 && color2[1] < 40 && color2[2] < 40 &&
+          Math.max(color1[0], color1[1], color1[2]) - Math.min(color1[0], color1[1], color1[2]) < 30 &&
+          Math.max(color2[0], color2[1], color2[2]) - Math.min(color2[0], color2[1], color2[2]) < 30) {
+        return 10
+      }
+      
       // Helper function to convert RGB to HSV
       const rgbToHsv = (r, g, b) => {
         r /= 255
