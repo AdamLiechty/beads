@@ -1427,6 +1427,49 @@ function App() {
         
         const avgColor = [Math.round(avgR), Math.round(avgG), Math.round(avgB)]
         
+        // Classify color into Red, Yellow, Green, Blue, Black, or White
+        const classifyColor = (r, g, b) => {
+          // Normalize RGB to 0-1
+          const nr = r / 255
+          const ng = g / 255
+          const nb = b / 255
+          
+          // Calculate brightness and saturation
+          const max = Math.max(nr, ng, nb)
+          const min = Math.min(nr, ng, nb)
+          const brightness = max
+          const saturation = max === 0 ? 0 : (max - min) / max
+          
+          // Check for black/white first
+          if (brightness < 0.2) return { category: 'Black', letter: '' }
+          if (saturation < 0.15 && brightness > 0.8) return { category: 'White', letter: 'W' }
+          
+          // Calculate hue for colored pixels
+          let hue = 0
+          if (saturation > 0) {
+            const delta = max - min
+            if (max === nr) {
+              hue = ((ng - nb) / delta) % 6
+            } else if (max === ng) {
+              hue = (nb - nr) / delta + 2
+            } else {
+              hue = (nr - ng) / delta + 4
+            }
+            hue *= 60
+            if (hue < 0) hue += 360
+          }
+          
+          // Classify by hue ranges
+          if (hue >= 315 || hue < 45) return { category: 'Red', letter: 'R' }      // Red: 315-45°
+          if (hue >= 45 && hue < 135) return { category: 'Yellow', letter: 'Y' }   // Yellow: 45-135°
+          if (hue >= 135 && hue < 225) return { category: 'Green', letter: 'G' }   // Green: 135-225°
+          if (hue >= 225 && hue < 315) return { category: 'Blue', letter: 'B' }    // Blue: 225-315°
+          
+          return { category: 'Unknown', letter: '?' }
+        }
+        
+        const colorClass = classifyColor(avgColor[0], avgColor[1], avgColor[2])
+        
         beads.push({
           centerX: avgX,
           centerY: avgY,
@@ -1434,7 +1477,9 @@ function App() {
           hex: rgbToHex(avgColor[0], avgColor[1], avgColor[2]),
           radius: group.length * 2, // Size based on number of samples
           vibrancy: avgVibrancy,
-          sampleCount: group.length
+          sampleCount: group.length,
+          category: colorClass.category,
+          letter: colorClass.letter
         })
       }
     }
@@ -1880,7 +1925,9 @@ function App() {
               <div className="beads-sequence">
                 {detectedBeads.map((bead, index) => (
                   <div key={index} className="bead-item-compact">
-                    <div className="bead-number">{index + 1}</div>
+                    <div className="bead-number" title={`${bead.category} (${index + 1})`}>
+                      {bead.letter || (index + 1)}
+                    </div>
                     <div 
                       className="bead-swatch"
                       style={{ backgroundColor: bead.hex }}
@@ -1890,7 +1937,8 @@ function App() {
               </div>
               <div className="beads-summary">
                 <p>Total beads detected: {detectedBeads.length}</p>
-                <p>Colors in order: {detectedBeads.map(bead => bead.hex).join(' → ')}</p>
+                <p>Color categories: {detectedBeads.map(bead => bead.category).join(' → ')}</p>
+                <p>Hex colors: {detectedBeads.map(bead => bead.hex).join(' → ')}</p>
               </div>
             </div>
           ) : (
