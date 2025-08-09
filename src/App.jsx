@@ -245,10 +245,14 @@ function App() {
         canvas.height = originalHeight
       }
       
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      
-      // Get image data and run detection
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          // Clear canvas completely before drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    
+    console.log(`Canvas cleared and image drawn: ${canvas.width}x${canvas.height}`)
+    
+    // Get image data and run detection
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const result = detectBeadsWithOpenCV(imageData.data, canvas.width, canvas.height) || { beads: [], densityMask: null, edges: null, colorSamples: [] }
       const detectedBeads = result.beads || []
       const densityMask = result.densityMask
@@ -309,6 +313,11 @@ function App() {
     }
     
     console.log('Taking "photo" of test image')
+    
+    // Clear any previous state first
+    setDetectedBeads([])
+    setBraceletCurve(null)
+    clearOverlay()
     
     // Create a data URL from the test image for consistency with photo mode
     const canvas = document.createElement('canvas')
@@ -937,8 +946,17 @@ function App() {
     
     console.log(`Found ${highDensityPoints.length} high-density points`)
     
-    // Sort by density and take top candidates
-    highDensityPoints.sort((a, b) => b.density - a.density)
+    // Sort by density and take top candidates (with stable ordering for equal densities)
+    highDensityPoints.sort((a, b) => {
+      if (b.density !== a.density) {
+        return b.density - a.density // Primary: sort by density (highest first)
+      }
+      // Secondary: sort by position for deterministic ordering when densities are equal
+      if (a.y !== b.y) {
+        return a.y - b.y // Sort by y coordinate
+      }
+      return a.x - b.x // Sort by x coordinate
+    })
     const candidateCenters = highDensityPoints.slice(0, 20) // Top 20 density points
     
     let bestCenter = { x: width / 2, y: height / 2 }
@@ -954,14 +972,23 @@ function App() {
       const maxRadius = Math.min(width, height) * 0.4
       const radiusStep = Math.min(width, height) * 0.01
       
-      for (let radius = minRadius; radius <= maxRadius; radius += radiusStep) {
-        const density = evaluateEllipseDensity(candidate.x, candidate.y, radius)
-        if (density > bestCoverage) {
-          bestCoverage = density
-          bestCenter = { x: candidate.x, y: candidate.y }
-          bestRadius = radius
+              for (let radius = minRadius; radius <= maxRadius; radius += radiusStep) {
+          const density = evaluateEllipseDensity(candidate.x, candidate.y, radius)
+          
+          // Calculate distance from image center for tie-breaking
+          const centerX = width / 2
+          const centerY = height / 2
+          const distanceFromCenter = Math.sqrt((candidate.x - centerX)**2 + (candidate.y - centerY)**2)
+          const currentBestDistance = Math.sqrt((bestCenter.x - centerX)**2 + (bestCenter.y - centerY)**2)
+          
+          // Accept if density is better, or if density is equal but closer to center
+          if (density > bestCoverage || 
+              (Math.abs(density - bestCoverage) < 0.001 && distanceFromCenter < currentBestDistance)) {
+            bestCoverage = density
+            bestCenter = { x: candidate.x, y: candidate.y }
+            bestRadius = radius
+          }
         }
-      }
     }
     
     // Also try a grid search across the entire image
@@ -974,7 +1001,16 @@ function App() {
         
         for (let radius = minRadius; radius <= maxRadius; radius += radiusStep) {
           const density = evaluateEllipseDensity(x, y, radius)
-          if (density > bestCoverage) {
+          
+          // Calculate distance from image center for tie-breaking
+          const centerX = width / 2
+          const centerY = height / 2
+          const distanceFromCenter = Math.sqrt((x - centerX)**2 + (y - centerY)**2)
+          const currentBestDistance = Math.sqrt((bestCenter.x - centerX)**2 + (bestCenter.y - centerY)**2)
+          
+          // Accept if density is better, or if density is equal but closer to center
+          if (density > bestCoverage || 
+              (Math.abs(density - bestCoverage) < 0.001 && distanceFromCenter < currentBestDistance)) {
             bestCoverage = density
             bestCenter = { x, y }
             bestRadius = radius
@@ -984,6 +1020,8 @@ function App() {
     }
     
     console.log(`Best circle found: center=(${bestCenter.x.toFixed(1)}, ${bestCenter.y.toFixed(1)}), radius=${bestRadius.toFixed(1)}, average density: ${(bestCoverage * 100).toFixed(1)}%`)
+    console.log(`Image center for reference: (${(width/2).toFixed(1)}, ${(height/2).toFixed(1)})`)
+    console.log(`Distance from center: ${Math.sqrt((bestCenter.x - width/2)**2 + (bestCenter.y - height/2)**2).toFixed(1)} pixels`)
     
     // Generate points along the best circle
     const points = []
