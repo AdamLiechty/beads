@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
+const NUM_ELLIPSE_SAMPLES = 200 // Single constant to control both ellipse and sampling
+
 // Global OpenCV loading state to prevent duplicate loading
 let opencvLoadingPromise = null
 let opencvLoaded = false
@@ -671,7 +673,6 @@ function App() {
   // Extract the bracelet curve path using global ellipse search
   const extractBraceletCurve = (contour, width, height, densityMask) => {
     const cv = window.cv
-    const NUM_SAMPLES = 200 // Single constant to control both ellipse and sampling
     
     console.log('Starting global ellipse search...')
     
@@ -773,8 +774,8 @@ function App() {
     // Generate points along the best circle
     const points = []
     
-    for (let i = 0; i < NUM_SAMPLES; i++) {
-      const t = (2 * Math.PI * i) / NUM_SAMPLES
+    for (let i = 0; i < NUM_ELLIPSE_SAMPLES; i++) {
+      const t = (2 * Math.PI * i) / NUM_ELLIPSE_SAMPLES
       const x = bestCenter.x + bestRadius * Math.cos(t)
       const y = bestCenter.y + bestRadius * Math.sin(t)
       
@@ -789,7 +790,7 @@ function App() {
       points: points,
       center: bestCenter,
       radius: bestRadius,
-      numSamples: NUM_SAMPLES
+      numSamples: NUM_ELLIPSE_SAMPLES
     }
   }
 
@@ -967,6 +968,12 @@ function App() {
         return [(r + m) * 255, (g + m) * 255, (b + m) * 255]
       }
       
+      // Calculate simple non-normalized distance
+      const dr_simple = color1[0] - color2[0]
+      const dg_simple = color1[1] - color2[1]
+      const db_simple = color1[2] - color2[2]
+      const simpleDistance = Math.sqrt(dr_simple * dr_simple + dg_simple * dg_simple + db_simple * db_simple)
+      
       // Convert both colors to HSV
       const hsv1 = rgbToHsv(color1[0], color1[1], color1[2])
       const hsv2 = rgbToHsv(color2[0], color2[1], color2[2])
@@ -981,10 +988,13 @@ function App() {
       const normalizedRgb2 = hsvToRgb(normalizedHsv2[0], normalizedHsv2[1], normalizedHsv2[2])
       
       // Calculate distance using normalized colors
-      const dr = normalizedRgb1[0] - normalizedRgb2[0]
-      const dg = normalizedRgb1[1] - normalizedRgb2[1]
-      const db = normalizedRgb1[2] - normalizedRgb2[2]
-      return Math.sqrt(dr * dr + dg * dg + db * db)
+      const dr_norm = normalizedRgb1[0] - normalizedRgb2[0]
+      const dg_norm = normalizedRgb1[1] - normalizedRgb2[1]
+      const db_norm = normalizedRgb1[2] - normalizedRgb2[2]
+      const normalizedDistance = Math.sqrt(dr_norm * dr_norm + dg_norm * dg_norm + db_norm * db_norm)
+      
+      // Return the minimum of both distances - this helps with very dark colors
+      return Math.min(simpleDistance, normalizedDistance)
     }
     
     // Function to check if there's an edge between two points
@@ -1027,7 +1037,7 @@ function App() {
       const colorDiff = colorDistance(sample1.color, sample2.color)
       console.log(`Color diff ${i} ${i+1}: ${colorDiff}, %c${sample1.hex}, %c${sample2.hex}`, `color: #000; background: ${sample1.hex}`, `color: #000; background: ${sample2.hex}`)
       
-      if (colorDiff < 40) { // Color similarity threshold
+      if (colorDiff < 40 && currentGroup.length < NUM_ELLIPSE_SAMPLES / 25) { // Color similarity threshold
         // Check if there's an edge between them (but be more lenient for specular highlights)
         const hasEdge = hasEdgeBetween(sample1, sample2)
         if (!hasEdge) {
