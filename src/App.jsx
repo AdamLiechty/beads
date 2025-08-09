@@ -22,6 +22,8 @@ function App() {
   const [braceletCurve, setBraceletCurve] = useState(null)
   const hasRunTestDetectionRef = useRef(false)
   const [showDetectButton, setShowDetectButton] = useState(false)
+  const [capturedPhoto, setCapturedPhoto] = useState(null)
+  const [isPhotoMode, setIsPhotoMode] = useState(false)
 
   // Load OpenCV for browser (prevent duplicate loading)
   useEffect(() => {
@@ -153,6 +155,8 @@ function App() {
       setDetectedBeads([])
       setDebugInfo('')
       setBraceletCurve(null)
+      setCapturedPhoto(null) // Clear captured photo
+      setIsPhotoMode(false) // Exit photo mode
       clearOverlay()
     }
   }
@@ -175,6 +179,141 @@ function App() {
     }
   }
 
+  // Capture photo from live camera stream
+  const handleCapturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return
+    
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    
+    // Set canvas size to match video
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    
+    // Draw current video frame to canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    
+    // Get image data as data URL
+    const photoDataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    
+    // Store captured photo and switch to photo mode
+    setCapturedPhoto(photoDataUrl)
+    setIsPhotoMode(true)
+    setShowDetectButton(false) // Hide detect button since we'll auto-detect
+    
+    console.log('Photo captured, starting bead detection')
+    
+    // Automatically start bead detection on the captured photo
+    setTimeout(() => {
+      if (opencvReady) {
+        detectBeadsOnPhoto(photoDataUrl)
+      }
+    }, 100) // Small delay to ensure UI is updated
+  }
+
+  // Detect beads on a captured photo
+  const detectBeadsOnPhoto = (photoDataUrl) => {
+    console.log('detectBeadsOnPhoto called with photo data')
+    
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+
+    // Target processing resolution
+    const targetWidth = 640
+    const targetHeight = 480
+
+    // Use captured photo
+    const img = new Image()
+    img.onload = () => {
+      console.log('Photo loaded for processing, starting detection')
+      const originalWidth = img.naturalWidth
+      const originalHeight = img.naturalHeight
+      
+      // Check if downscaling is needed
+      if (originalWidth > targetWidth || originalHeight > targetHeight) {
+        // Calculate scale to fit within target dimensions while maintaining aspect ratio
+        const scaleX = targetWidth / originalWidth
+        const scaleY = targetHeight / originalHeight
+        const scale = Math.min(scaleX, scaleY)
+        
+        canvas.width = Math.round(originalWidth * scale)
+        canvas.height = Math.round(originalHeight * scale)
+        console.log(`Downscaling captured photo from ${originalWidth}x${originalHeight} to ${canvas.width}x${canvas.height}`)
+      } else {
+        canvas.width = originalWidth
+        canvas.height = originalHeight
+      }
+      
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      
+      // Get image data and run detection
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const result = detectBeadsWithOpenCV(imageData.data, canvas.width, canvas.height) || { beads: [], densityMask: null, edges: null, colorSamples: [] }
+      const detectedBeads = result.beads || []
+      const densityMask = result.densityMask
+      const edges = result.edges
+      const colorSamples = result.colorSamples || []
+      
+      console.log(`Photo detection completed: ${detectedBeads.length} beads found`)
+      setDetectedBeads(detectedBeads)
+      
+      // Draw results on overlay after ensuring the photo image is fully rendered
+      let retryCount = 0
+      const maxRetries = 10
+      const drawOverlays = () => {
+        // Check if the captured photo image is rendered with proper dimensions
+        const photoImg = document.querySelector('.captured-photo')
+        console.log(`Retry ${retryCount}: photoImg exists: ${!!photoImg}, complete: ${photoImg?.complete}, dimensions: ${photoImg?.getBoundingClientRect().width}x${photoImg?.getBoundingClientRect().height}`)
+        
+        if (photoImg && photoImg.complete && photoImg.getBoundingClientRect().width > 0) {
+          console.log('Drawing overlays on captured photo:', {
+            beadsCount: detectedBeads?.length || 0,
+            hasDensityMask: !!densityMask,
+            hasEdges: !!edges,
+            samplesCount: colorSamples?.length || 0,
+            photoImgDimensions: `${photoImg.getBoundingClientRect().width}x${photoImg.getBoundingClientRect().height}`
+          })
+          drawBeadMarkers(detectedBeads || [], canvas.width, canvas.height, braceletCurve, densityMask, edges, colorSamples)
+          
+          // Clean up OpenCV Mats after drawing
+          if (densityMask) densityMask.delete()
+          if (edges) edges.delete()
+        } else if (retryCount < maxRetries) {
+          // If photo not ready, try again in 100ms (up to 10 tries)
+          retryCount++
+          console.log(`Photo not ready, retry ${retryCount}/${maxRetries}`)
+          setTimeout(drawOverlays, 100)
+        } else {
+          console.warn('Photo never became ready for overlay drawing, cleaning up OpenCV Mats')
+          // Clean up OpenCV Mats even if we never drew
+          if (densityMask) densityMask.delete()
+          if (edges) edges.delete()
+        }
+      }
+      
+      // Start trying to draw overlays after a short delay
+      setTimeout(drawOverlays, 100)
+    }
+    img.src = photoDataUrl
+  }
+
+  // Return to live camera view
+  const handleRetakePhoto = () => {
+    console.log('Retake clicked - before state change:', { isPhotoMode, isCameraActive, hasVideo: !!videoRef.current })
+    setCapturedPhoto(null)
+    setIsPhotoMode(false)
+    setDetectedBeads([])
+    setBraceletCurve(null)
+    // Clear overlay canvas
+    if (overlayCanvasRef.current) {
+      const overlayCtx = overlayCanvasRef.current.getContext('2d')
+      overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
+    }
+    
+    console.log('Retake completed - after state change:', { isPhotoMode: false, isCameraActive, hasVideo: !!videoRef.current })
+  }
+
   // Draw bead markers and bracelet curve on overlay
   const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null, edges = null, colorSamples = null) => {
     console.log(`Drawing overlay for processed image: ${imageWidth}x${imageHeight}`)
@@ -183,12 +322,32 @@ function App() {
     if (!overlayCanvas) return
 
     // Get the actual displayed image element
-    const imageElement = isTestMode ? imageRef.current : videoRef.current
+    let imageElement
+    if (isTestMode) {
+      imageElement = imageRef.current
+    } else {
+      // Check if we have a captured photo element (regardless of isPhotoMode state)
+      const capturedPhotoElement = overlayCanvas.parentElement.querySelector('.captured-photo')
+      if (capturedPhotoElement) {
+        imageElement = capturedPhotoElement
+        console.log('Using captured photo element for overlay alignment')
+      } else {
+        imageElement = videoRef.current
+        console.log('Using video element for overlay alignment')
+      }
+    }
+    
     if (!imageElement) return
 
     // Get the actual displayed dimensions
     const displayRect = imageElement.getBoundingClientRect()
     const containerRect = overlayCanvas.parentElement.getBoundingClientRect()
+    
+    // Safety check: if display dimensions are zero, skip drawing
+    if (displayRect.width === 0 || displayRect.height === 0) {
+      console.log('Display dimensions are zero, skipping overlay drawing')
+      return
+    }
     
     console.log(`Display dimensions: ${displayRect.width.toFixed(0)}x${displayRect.height.toFixed(0)}`)
     
@@ -513,7 +672,7 @@ function App() {
       
       if (!bestBraceletContour) {
         console.log('No suitable bracelet contour found with any density threshold')
-        return []
+        return { beads: [], densityMask: null, edges: null, colorSamples: [] }
       }
       
       // Use the best density threshold result for the final processing
@@ -1359,7 +1518,17 @@ function App() {
 
   // Detect circular beads using OpenCV
   const detectBeads = () => {
-    if (!isCameraActive || !opencvReady) return
+    console.log('detectBeads called with mode:', { isPhotoMode, isCameraActive, hasPhoto: !!capturedPhoto, isTestMode })
+    if (!opencvReady) return
+    if (!isCameraActive && !isPhotoMode) return
+    
+    // Skip if we're in photo mode - use detectBeadsOnPhoto instead
+    if (isPhotoMode) {
+      console.log('Skipping detectBeads in photo mode - use detectBeadsOnPhoto instead')
+      return
+    } else {
+      console.log('Continuing with regular detectBeads in camera mode')
+    }
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -1424,11 +1593,11 @@ function App() {
     console.log(`Processing image: ${width}x${height}`)
 
     // Use OpenCV-based detection
-    const result = detectBeadsWithOpenCV(data, width, height)
-    const detectedBeads = result.beads
+    const result = detectBeadsWithOpenCV(data, width, height) || { beads: [], densityMask: null, edges: null, colorSamples: [] }
+    const detectedBeads = result.beads || []
     const densityMask = result.densityMask
     const edges = result.edges
-    const colorSamples = result.colorSamples
+    const colorSamples = result.colorSamples || []
     console.log(`Beads found: ${detectedBeads.length}`)
 
     // Sort beads along the bracelet curve path
@@ -1524,13 +1693,21 @@ function App() {
               <button onClick={stopCamera} className="stop-btn">
                 {isTestMode ? 'Stop Detection' : 'Stop Camera'}
               </button>
-              {!isTestMode && showDetectButton && (
+              {!isTestMode && !isPhotoMode && (
                 <button 
-                  onClick={handleDetectBeads} 
-                  className="detect-btn"
+                  onClick={handleCapturePhoto} 
+                  className="capture-btn"
                   disabled={isProcessing}
                 >
-                  {isProcessing ? 'Detecting...' : 'Detect Beads'}
+                  📷 Take Photo
+                </button>
+              )}
+              {!isTestMode && isPhotoMode && (
+                <button 
+                  onClick={handleRetakePhoto} 
+                  className="retake-btn"
+                >
+                  🔄 Retake
                 </button>
               )}
             </div>
@@ -1550,18 +1727,28 @@ function App() {
                 style={{ display: isCameraActive ? 'block' : 'none' }}
               />
             ) : (
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="camera-feed"
-              />
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="camera-feed"
+                  style={{ display: isPhotoMode ? 'none' : 'block' }}
+                />
+                {isPhotoMode && capturedPhoto && (
+                  <img
+                    src={capturedPhoto}
+                    alt="Captured photo"
+                    className="captured-photo"
+                  />
+                )}
+              </>
             )}
             <canvas
               ref={overlayCanvasRef}
               className="overlay-canvas"
-              style={{ display: isCameraActive ? 'block' : 'none' }}
+              style={{ display: (isCameraActive || isPhotoMode) ? 'block' : 'none' }}
             />
           </div>
           <canvas

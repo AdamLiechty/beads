@@ -366,3 +366,55 @@
   animation: pulse 1s infinite;
 }
 
+.capture-btn {
+  background: linear-gradient(145deg, #2196F3, #1976D2);
+  border: none;
+  color: white;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+}
+
+.capture-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+}
+
+.capture-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+}
+
+.retake-btn {
+  background: linear-gradient(145deg, #FF9800, #F57C00);
+  border: none;
+  color: white;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 152, 0, 0.3);
+}
+
+.retake-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4);
+}
+
+.captured-photo {
+  width: 100%;
+  height: auto;
+  border-radius: 15px;
+  background: #000;
+  max-height: 500px;
+  object-fit: contain;
+}
+
