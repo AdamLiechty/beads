@@ -272,9 +272,12 @@ function App() {
             hasDensityMask: !!densityMask,
             hasEdges: !!edges,
             samplesCount: colorSamples?.length || 0,
-            photoImgDimensions: `${photoImg.getBoundingClientRect().width}x${photoImg.getBoundingClientRect().height}`
+            photoImgDimensions: `${photoImg.getBoundingClientRect().width}x${photoImg.getBoundingClientRect().height}`,
+            canvasSize: `${canvas.width}x${canvas.height}`
           })
+          console.log('About to call drawBeadMarkers from photo detection path')
           drawBeadMarkers(detectedBeads || [], canvas.width, canvas.height, braceletCurve, densityMask, edges, colorSamples)
+          console.log('drawBeadMarkers call completed from photo detection path')
           
           // Clean up OpenCV Mats after drawing
           if (densityMask) densityMask.delete()
@@ -298,6 +301,42 @@ function App() {
     img.src = photoDataUrl
   }
 
+  // Handle "Take Photo" in test mode - use the test image
+  const handleTakeTestPhoto = () => {
+    if (!imageRef.current) {
+      console.log('No test image available')
+      return
+    }
+    
+    console.log('Taking "photo" of test image')
+    
+    // Create a data URL from the test image for consistency with photo mode
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = imageRef.current
+    
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    ctx.drawImage(img, 0, 0)
+    
+    const testImageDataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    
+    // Set states like in photo mode
+    setCapturedPhoto(testImageDataUrl)
+    setIsPhotoMode(true)
+    
+    console.log('Test "photo" captured, starting bead detection')
+    
+    // Use the same photo detection function
+    setTimeout(() => {
+      if (opencvReady) {
+        detectBeadsOnPhoto(testImageDataUrl)
+      }
+    }, 100)
+  }
+
+
+
   // Return to live camera view
   const handleRetakePhoto = () => {
     console.log('Retake clicked - before state change:', { isPhotoMode, isCameraActive, hasVideo: !!videoRef.current })
@@ -316,25 +355,41 @@ function App() {
 
   // Draw bead markers and bracelet curve on overlay
   const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null, edges = null, colorSamples = null) => {
-    console.log(`Drawing overlay for processed image: ${imageWidth}x${imageHeight}`)
+    console.log(`drawBeadMarkers called:`, {
+      imageWidth,
+      imageHeight, 
+      isPhotoMode, 
+      isTestMode,
+      beadsCount: beads?.length || 0,
+      callerInfo: new Error().stack.split('\n')[2]?.trim()
+    })
+    
+    // Debug: Check if we're in a problematic state
+    if (isTestMode && !isPhotoMode) {
+      console.log('drawBeadMarkers called in test mode with photo mode false - allowing but investigating')
+    }
     
     const overlayCanvas = overlayCanvasRef.current
     if (!overlayCanvas) return
 
     // Get the actual displayed image element
     let imageElement
-    if (isTestMode) {
+    
+    // Always check for captured photo element first (regardless of state)
+    const capturedPhotoElement = overlayCanvas.parentElement.querySelector('.captured-photo')
+    
+    if (capturedPhotoElement && capturedPhotoElement.getBoundingClientRect().width > 0) {
+      imageElement = capturedPhotoElement
+      console.log('Using captured photo element for overlay alignment')
+    } else if (isTestMode && imageRef.current) {
       imageElement = imageRef.current
+      console.log('Using test image element for overlay alignment')
+    } else if (videoRef.current) {
+      imageElement = videoRef.current
+      console.log('Using video element for overlay alignment')
     } else {
-      // Check if we have a captured photo element (regardless of isPhotoMode state)
-      const capturedPhotoElement = overlayCanvas.parentElement.querySelector('.captured-photo')
-      if (capturedPhotoElement) {
-        imageElement = capturedPhotoElement
-        console.log('Using captured photo element for overlay alignment')
-      } else {
-        imageElement = videoRef.current
-        console.log('Using video element for overlay alignment')
-      }
+      console.log('No suitable image element found for overlay alignment')
+      return
     }
     
     if (!imageElement) return
@@ -1519,6 +1574,7 @@ function App() {
   // Detect circular beads using OpenCV
   const detectBeads = () => {
     console.log('detectBeads called with mode:', { isPhotoMode, isCameraActive, hasPhoto: !!capturedPhoto, isTestMode })
+    console.log('detectBeads call stack:', new Error().stack.split('\n').slice(1, 4).map(line => line.trim()))
     if (!opencvReady) return
     if (!isCameraActive && !isPhotoMode) return
     
@@ -1526,9 +1582,15 @@ function App() {
     if (isPhotoMode) {
       console.log('Skipping detectBeads in photo mode - use detectBeadsOnPhoto instead')
       return
-    } else {
-      console.log('Continuing with regular detectBeads in camera mode')
     }
+    
+    // Skip if we're in test mode - test mode uses handleTakeTestPhoto -> detectBeadsOnPhoto
+    if (isTestMode) {
+      console.log('Skipping detectBeads in test mode - test mode uses handleTakeTestPhoto -> detectBeadsOnPhoto')
+      return
+    }
+    
+    console.log('Continuing with regular detectBeads in live camera mode')
 
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -1537,28 +1599,7 @@ function App() {
     const targetWidth = 640
     const targetHeight = 480
 
-    if (isTestMode && imageRef.current) {
-      // Use test image
-      const originalWidth = imageRef.current.naturalWidth
-      const originalHeight = imageRef.current.naturalHeight
-      
-      // Check if downscaling is needed
-      if (originalWidth > targetWidth || originalHeight > targetHeight) {
-        // Calculate scale to fit within target dimensions while maintaining aspect ratio
-        const scaleX = targetWidth / originalWidth
-        const scaleY = targetHeight / originalHeight
-        const scale = Math.min(scaleX, scaleY)
-        
-        canvas.width = Math.round(originalWidth * scale)
-        canvas.height = Math.round(originalHeight * scale)
-        console.log(`Downscaling test image from ${originalWidth}x${originalHeight} to ${canvas.width}x${canvas.height}`)
-      } else {
-        canvas.width = originalWidth
-        canvas.height = originalHeight
-      }
-      
-      ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height)
-    } else if (videoRef.current) {
+    if (videoRef.current) {
       // Use camera feed
       const video = videoRef.current
       const originalWidth = video.videoWidth
@@ -1667,17 +1708,7 @@ function App() {
   }
 
   // Single detection run in test mode
-  useEffect(() => {
-    if (isCameraActive && opencvReady && isTestMode) {
-      // In test mode, run detection only once
-      if (!hasRunTestDetectionRef.current) {
-        hasRunTestDetectionRef.current = true
-        setIsProcessing(true)
-        detectBeads()
-        setTimeout(() => setIsProcessing(false), 100)
-      }
-    }
-  }, [isCameraActive, isTestMode, opencvReady])
+  // Test mode detection is now handled by detectBeadsOnTestImage() called from startCamera()
 
   return (
     <div className="App">
@@ -1686,23 +1717,23 @@ function App() {
         <div className="camera-controls">
           {!isCameraActive ? (
             <button onClick={startCamera} className="start-btn">
-              {isTestMode ? 'Start Detection' : 'Start Camera'}
+              Start Camera
             </button>
           ) : (
             <div className="camera-buttons">
               <button onClick={stopCamera} className="stop-btn">
-                {isTestMode ? 'Stop Detection' : 'Stop Camera'}
+                Stop Camera
               </button>
-              {!isTestMode && !isPhotoMode && (
+              {!isPhotoMode && (
                 <button 
-                  onClick={handleCapturePhoto} 
+                  onClick={isTestMode ? handleTakeTestPhoto : handleCapturePhoto} 
                   className="capture-btn"
                   disabled={isProcessing}
                 >
                   📷 Take Photo
                 </button>
               )}
-              {!isTestMode && isPhotoMode && (
+              {isPhotoMode && (
                 <button 
                   onClick={handleRetakePhoto} 
                   className="retake-btn"
@@ -1719,13 +1750,22 @@ function App() {
         <div className="camera-section">
           <div className="image-container">
             {isTestMode ? (
-              <img
-                ref={imageRef}
-                src={testImage}
-                alt="Test beads"
-                className="test-image"
-                style={{ display: isCameraActive ? 'block' : 'none' }}
-              />
+              <>
+                <img
+                  ref={imageRef}
+                  src={testImage}
+                  alt="Test beads"
+                  className="test-image"
+                  style={{ display: (isCameraActive && !isPhotoMode) ? 'block' : 'none' }}
+                />
+                {isPhotoMode && capturedPhoto && (
+                  <img
+                    src={capturedPhoto}
+                    alt="Captured test photo"
+                    className="captured-photo"
+                  />
+                )}
+              </>
             ) : (
               <>
                 <video
