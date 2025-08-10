@@ -1444,7 +1444,7 @@ function App() {
           if (saturation < 0.15 && brightness > 0.8) return { category: 'White', letter: 'W' }
           
           // Check for black (very low brightness AND low saturation, to avoid dark colored beads)
-          if (brightness < 0.08 || (brightness < 0.12 && saturation < 0.15)) return { category: 'Black', letter: '' }
+          if (brightness < 0.08 || (brightness < 0.12 && saturation < 0.15)) return { category: 'Black', letter: 'K' }
           
           // Calculate hue for colored pixels
           let hue = 0
