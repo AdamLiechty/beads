@@ -7,6 +7,8 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationType, setAnimationType] = useState(null);
   const [bumpedCell, setBumpedCell] = useState(null);
+  const [bumpDirection, setBumpDirection] = useState(null);
+  const [boundaryBounce, setBoundaryBounce] = useState(null);
   const [currentGrid, setCurrentGrid] = useState(grid);
 
   // Only reset position when component first mounts or when x/y coordinates change
@@ -18,6 +20,8 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   useEffect(() => {
     setCurrentGrid(grid);
     setBumpedCell(null);
+    setBumpDirection(null);
+    setBoundaryBounce(null);
   }, [grid]);
 
   // Store onGo callback in ref to avoid dependency issues
@@ -49,29 +53,41 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       let newPos = { ...currentPos };
       
       // Calculate new position based on bead color
+      let direction = '';
       switch (bead) {
         case 'R': // Red = Up
           newPos.y = Math.max(0, currentPos.y - 1);
+          direction = 'up';
           break;
         case 'Y': // Yellow = Right
           newPos.x = Math.min(width - 1, currentPos.x + 1);
+          direction = 'right';
           break;
         case 'G': // Green = Down
           newPos.y = Math.min(height - 1, currentPos.y + 1);
+          direction = 'down';
           break;
         case 'B': // Blue = Left
           newPos.x = Math.max(0, currentPos.x - 1);
+          direction = 'left';
           break;
         default:
           continue;
       }
       
+      // Check if we hit a boundary (position didn't change)
+      const hitBoundary = (newPos.x === currentPos.x && newPos.y === currentPos.y);
+      
       // Check what's at the new position
       const targetCell = currentGrid[newPos.y][newPos.x];
       
-      if (targetCell === 'C' || targetCell === 'B') {
+      if (hitBoundary) {
+        // Hit a boundary - animate bounce in the attempted direction
+        await animateBoundaryBounce(direction);
+        // Stay in same position
+      } else if (targetCell === 'C' || targetCell === 'B') {
         // Bump into cactus or bush
-        await animateBump(currentPos, newPos);
+        await animateBump(currentPos, newPos, direction);
         // Stay in same position
       } else if (targetCell === 'R') {
         // Hit rattlesnake
@@ -106,18 +122,28 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     }
   };
 
-  const animateBump = async (currentPos, targetPos) => {
+  const animateBump = async (currentPos, targetPos, direction) => {
     setBumpedCell(targetPos);
+    setBumpDirection(direction);
     setAnimationType('bump');
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 300));
     setAnimationType(null);
     setBumpedCell(null);
+    setBumpDirection(null);
   };
 
   const animateSnakeHit = async (currentPos, targetPos) => {
     setAnimationType('snake');
     await new Promise(resolve => setTimeout(resolve, 300));
     setAnimationType(null);
+  };
+
+  const animateBoundaryBounce = async (direction) => {
+    setBoundaryBounce(direction);
+    setAnimationType('boundary-bounce');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    setAnimationType(null);
+    setBoundaryBounce(null);
   };
 
   // Function to start movement - called from parent component
@@ -148,6 +174,8 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setIsAnimating(false);
     setAnimationType(null);
     setBumpedCell(null);
+    setBumpDirection(null);
+    setBoundaryBounce(null);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -161,6 +189,8 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setIsAnimating(false);
     setAnimationType(null);
     setBumpedCell(null);
+    setBumpDirection(null);
+    setBoundaryBounce(null);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -191,6 +221,11 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
         />
       );
       cellClass += ' kangaroo-rat';
+      if (boundaryBounce) {
+        cellClass += ` boundary-bounce-${boundaryBounce}`;
+      } else if (bumpDirection) {
+        cellClass += ` bump-bounce-${bumpDirection}`;
+      }
     } else if (cellValue === 'C') {
       cellContent = '';
       const isBumped = bumpedCell && bumpedCell.x === colIndex && bumpedCell.y === rowIndex;
