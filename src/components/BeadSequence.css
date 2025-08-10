@@ -65,20 +65,29 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .bead-sequence {
-    min-width: 100px;
+    min-width: auto;
     padding: 0.75rem;
+    max-height: none;
+    overflow-y: visible;
+  }
+  
+  .bead-list {
+    flex-direction: row;
+    gap: 6px;
+    justify-content: center;
+    flex-wrap: wrap;
   }
   
   .bead-circle {
-    width: 35px;
-    height: 35px;
-  }
-  
-  .bead-letter {
-    font-size: 12px;
+    width: 32px;
+    height: 32px;
   }
   
   .direction-arrow {
-    font-size: 10px;
+    display: none;
+  }
+  
+  .bead-circle.current-bead {
+    transform: scale(1.5);
   }
 }
