@@ -15,7 +15,7 @@ const KRMap = ({ height, width, grid, x, y }) => {
       cellContent = '🌵';
       cellClass += ' cactus';
     } else if (cellValue === 'B') {
-      cellContent = '🌿';
+      cellContent = '';
       cellClass += ' bush';
     } else if (cellValue === 'R') {
       cellContent = '🐍';
