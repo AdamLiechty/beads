@@ -9,7 +9,13 @@ const KRMap = ({ height, width, grid, x, y }) => {
     let cellClass = 'kr-map-cell';
     
     if (isKangarooRat) {
-      cellContent = '🐀';
+      cellContent = (
+        <img 
+          src="/kr.png" 
+          alt="Kangaroo Rat"
+          className="kangaroo-rat-image"
+        />
+      );
       cellClass += ' kangaroo-rat';
     } else if (cellValue === 'C') {
       cellContent = '🌵';
