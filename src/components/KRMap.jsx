@@ -9,6 +9,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   const [bumpedCell, setBumpedCell] = useState(null);
   const [bumpDirection, setBumpDirection] = useState(null);
   const [boundaryBounce, setBoundaryBounce] = useState(null);
+  const [isReturningToStart, setIsReturningToStart] = useState(false);
   const [currentGrid, setCurrentGrid] = useState(grid);
 
   // Only reset position when component first mounts or when x/y coordinates change
@@ -22,6 +23,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBumpedCell(null);
     setBumpDirection(null);
     setBoundaryBounce(null);
+    setIsReturningToStart(false);
   }, [grid]);
 
   // Store onGo callback in ref to avoid dependency issues
@@ -91,8 +93,8 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
         // Stay in same position
       } else if (targetCell === 'R') {
         // Hit rattlesnake
-        await animateSnakeHit(currentPos, newPos);
-        // Return to starting position
+        await animateSnakeHit(currentPos, newPos, direction);
+        // Position reset is now handled in animateSnakeHit
         currentPos = { x, y };
         setKangarooRatPos(currentPos);
       } else if (typeof targetCell === 'number' && targetCell > 0) {
@@ -132,10 +134,41 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBumpDirection(null);
   };
 
-  const animateSnakeHit = async (currentPos, targetPos) => {
+  const animateSnakeHit = async (currentPos, targetPos, direction) => {
     setAnimationType('snake');
-    await new Promise(resolve => setTimeout(resolve, 300));
+    setBumpedCell(targetPos); // Set the specific snake that was hit
+    setBumpDirection(direction); // Set direction for the bounce effect
+    
+    // Clear bump states immediately
+    setBumpedCell(null);
+    setBumpDirection(null);
+    
+    // Keep snake animation for the spin (only the bumped snake)
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Total spin duration
+    
+    // Clear snake animation state and immediately start rat return
     setAnimationType(null);
+    setIsReturningToStart(true);
+    
+    // Animate rat back to starting position with spin
+    const startPos = { x, y };
+    const steps = 10; // Number of animation steps
+    const stepDelay = 50; // Delay between each step
+    
+    for (let i = 0; i <= steps; i++) {
+      const progress = i / steps;
+      const currentX = currentPos.x + (startPos.x - currentPos.x) * progress;
+      const currentY = currentPos.y + (startPos.y - currentPos.y) * progress;
+      
+      setKangarooRatPos({ x: Math.round(currentX), y: Math.round(currentY) });
+      await new Promise(resolve => setTimeout(resolve, stepDelay));
+    }
+    
+    // Pause at starting position
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second pause
+    
+    // Clear return state
+    setIsReturningToStart(false);
   };
 
   const animateBoundaryBounce = async (direction) => {
@@ -176,6 +209,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBumpedCell(null);
     setBumpDirection(null);
     setBoundaryBounce(null);
+    setIsReturningToStart(false);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -191,6 +225,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBumpedCell(null);
     setBumpDirection(null);
     setBoundaryBounce(null);
+    setIsReturningToStart(false);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -226,6 +261,9 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       } else if (bumpDirection) {
         cellClass += ` bump-bounce-${bumpDirection}`;
       }
+      if (isReturningToStart) {
+        cellClass += ' animate-snake-spin';
+      }
     } else if (cellValue === 'C') {
       cellContent = '';
       const isBumped = bumpedCell && bumpedCell.x === colIndex && bumpedCell.y === rowIndex;
@@ -236,7 +274,8 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       cellClass += ` bush ${isBumped ? 'animate-bump' : ''}`;
     } else if (cellValue === 'R') {
       cellContent = '🐍';
-      cellClass += ` rattlesnake ${animationType === 'snake' ? 'animate-snake' : ''}`;
+      const isBumped = bumpedCell && bumpedCell.x === colIndex && bumpedCell.y === rowIndex;
+      cellClass += ` rattlesnake ${isBumped ? 'animate-bump' : ''} ${isBumped && animationType === 'snake' ? 'animate-snake-spin' : ''}`;
     } else if (typeof cellValue === 'number') {
       // Create visual representation of seeds
       if (cellValue === 0) {

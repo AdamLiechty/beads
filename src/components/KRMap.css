@@ -72,6 +72,10 @@
   animation: snake 0.3s ease-in-out;
 }
 
+.animate-snake-spin {
+  animation: snake-spin 1s linear;
+}
+
 .animate-boundary-bounce {
   animation: boundary-bounce 0.25s ease-in-out;
 }
@@ -183,6 +187,11 @@
 @keyframes snake {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.3); }
+}
+
+@keyframes snake-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
 }
 
 @keyframes boundary-bounce {
