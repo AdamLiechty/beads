@@ -315,6 +315,10 @@
 }
 
 @media (max-width: 768px) {
+  .kr-map-container {
+    padding: 1rem;
+  }
+  
   .kr-map-grid {
     max-width: 100%;
     gap: 1px;
@@ -334,5 +338,11 @@
   .kr-map-legend {
     flex-direction: column;
     align-items: center;
+  }
+  
+  .kr-map-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
   }
 }
