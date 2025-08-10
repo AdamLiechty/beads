@@ -56,7 +56,7 @@ const KRMap = ({ height, width, grid, x, y }) => {
 
   return (
     <div className="kr-map-container">
-      <h3>Kangaroo Rat Map</h3>
+      <h3>Kangaroo Rat Habitat</h3>
       <div 
         className="kr-map-grid"
         style={{
@@ -69,28 +69,6 @@ const KRMap = ({ height, width, grid, x, y }) => {
             renderCell(cell, rowIndex, colIndex)
           )
         )}
-      </div>
-      <div className="kr-map-legend">
-        <div className="legend-item">
-          <span className="legend-symbol">🐀</span>
-          <span>Kangaroo Rat</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-symbol">🌵</span>
-          <span>Cactus</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-symbol">🌿</span>
-          <span>Bush</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-symbol">🐍</span>
-          <span>Rattlesnake</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-symbol">1-9</span>
-          <span>Seeds</span>
-        </div>
       </div>
     </div>
   );
