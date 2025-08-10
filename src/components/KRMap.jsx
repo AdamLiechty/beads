@@ -1,6 +1,7 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import './KRMap.css';
 import DirectionPad from './DirectionPad';
+import BeadSequence from './BeadSequence';
 
 // Movement speed constant - higher values = slower movement
 const MOVEMENT_SPEED_FACTOR = 4;
@@ -17,6 +18,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   const [currentGrid, setCurrentGrid] = useState(grid);
   const [isFlipped, setIsFlipped] = useState(false);
   const [rotation, setRotation] = useState(0); // 0 = default, 90 = up, -90 = down
+  const [currentBeadIndex, setCurrentBeadIndex] = useState(-1);
 
   // Only reset position when component first mounts or when x/y coordinates change
   useEffect(() => {
@@ -58,6 +60,9 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     
     for (let i = 0; i < sequence.length; i++) {
       const bead = sequence[i].toUpperCase();
+      
+      // Set current bead index for visualization
+      setCurrentBeadIndex(i);
       
       // Skip black and white beads
       if (bead === 'K' || bead === 'W') continue;
@@ -215,12 +220,14 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       // Don't reset the grid - keep eaten seeds eaten
       
       setIsFlipped(false); // Reset flip state when starting new movement
+      setCurrentBeadIndex(-1); // Reset current bead index
       setIsAnimating(true);
       if (onGoRef.current) {
         onGoRef.current({ isAnimating: true, canStart: false });
       }
       await processBeadSequence(beadSequence);
       setIsAnimating(false);
+      setCurrentBeadIndex(-1); // Reset current bead index when done
       if (onGoRef.current) {
         onGoRef.current({ isAnimating: false, canStart: true });
       }
@@ -239,6 +246,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBoundaryBounce(null);
     setIsReturningToStart(false);
     setIsFlipped(false);
+    setCurrentBeadIndex(-1);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -256,6 +264,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBoundaryBounce(null);
     setIsReturningToStart(false);
     setIsFlipped(false);
+    setCurrentBeadIndex(-1);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -348,6 +357,11 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       </div>
       <div className="kr-map-content">
         <DirectionPad />
+        <BeadSequence 
+          beadSequence={beadSequence}
+          currentBeadIndex={currentBeadIndex}
+          isAnimating={isAnimating}
+        />
         <div 
             className="kr-map-grid"
             style={{
