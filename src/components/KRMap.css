@@ -63,6 +63,43 @@
   border-radius: 3px;
 }
 
+/* Animation classes */
+.animate-bump {
+  animation: bump 0.2s ease-in-out;
+}
+
+.animate-snake {
+  animation: snake 0.3s ease-in-out;
+}
+
+@keyframes bump {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+@keyframes snake {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+
+/* Header styling */
+.kr-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.kr-map-score {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
 .kr-map-cell.cactus {
   background: linear-gradient(45deg, #FFC107, #FFA000);
   border-color: #D68910;

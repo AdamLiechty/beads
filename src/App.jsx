@@ -2076,7 +2076,26 @@ function App() {
 
   return (
     <div className="App">
-      <header className="app-header">
+      <KRMap 
+        height={8}
+        width={8}
+        grid={[
+          [0, 3, 5, 'C', 1, 4, 'B', 2],
+          [2, 'C', 0, 4, 0, 3, 1, 0],
+          [1, 5, 'B', 2, 3, 'C', 0, 4],
+          ['C', 0, 3, 0, 5, 1, 'R', 2],
+          [4, 'B', 1, 0, 0, 0, 2, 'B'],
+          [2, 1, 0, 4, 5, 'B', 3, 1],
+          ['B', 3, 2, 'R', 1, 4, 'C', 0],
+          [5, 0, 0, 2, 'B', 3, 1, 0]
+        ]}
+        x={3}
+        y={4}
+        beadSequence={beadSequenceText}
+        onScoreUpdate={(score) => console.log('New score:', score)}
+      />
+
+<header className="app-header">
         <DirectionPad />
         <div className="header-content">
           <h1>Bead Color Detector</h1>
@@ -2112,23 +2131,6 @@ function App() {
           </div>
         </div>
       </header>
-
-      <KRMap 
-        height={8}
-        width={8}
-        grid={[
-          [0, 3, 5, 'C', 1, 4, 'B', 2],
-          [2, 'C', 0, 4, 0, 3, 1, 0],
-          [1, 5, 'B', 2, 3, 'C', 0, 4],
-          ['C', 0, 3, 0, 5, 1, 'R', 2],
-          [4, 'B', 1, 0, 0, 0, 2, 'B'],
-          [2, 1, 0, 4, 5, 'B', 3, 1],
-          ['B', 3, 2, 'R', 1, 4, 'C', 0],
-          [5, 0, 0, 2, 'B', 3, 1, 0]
-        ]}
-        x={3}
-        y={4}
-      />
 
       <main className="main-content">
         <div className="camera-section">
