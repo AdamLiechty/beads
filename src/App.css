@@ -315,10 +315,58 @@
 
 .no-beads {
   text-align: center;
+  padding: 2rem;
   font-size: 1.1rem;
-  opacity: 0.8;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bead-sequence-editor {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.bead-sequence-editor label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: white;
+}
+
+.bead-sequence-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  font-size: 1.1rem;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+}
+
+.bead-sequence-input:focus {
+  outline: none;
+  border-color: #4CAF50;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+}
+
+.bead-sequence-editor small {
+  display: block;
+  margin-top: 0.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
   font-style: italic;
-  margin: 2rem 0;
 }
 
 /* Responsive design */
@@ -358,6 +406,16 @@
   .bead-item-compact .bead-swatch {
     width: 35px;
     height: 35px;
+  }
+  
+  .bead-sequence-editor {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .bead-sequence-input {
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
   }
   
   .bead-swatch {

@@ -24,6 +24,15 @@ function App() {
   const [showDetectButton, setShowDetectButton] = useState(false)
   const [capturedPhoto, setCapturedPhoto] = useState(null)
   const [isPhotoMode, setIsPhotoMode] = useState(false)
+  const [beadSequenceText, setBeadSequenceText] = useState('RYGBWK')
+
+  // Auto-update bead sequence text when beads are detected
+  useEffect(() => {
+    if (detectedBeads.length > 0) {
+      const sequence = detectedBeads.map(bead => bead.letter || '?').join('')
+      setBeadSequenceText(sequence)
+    }
+  }, [detectedBeads])
 
   // Load OpenCV for browser (prevent duplicate loading)
   useEffect(() => {
@@ -2148,6 +2157,20 @@ function App() {
         </div>
 
         <div className="results-section">
+          {detectedBeads.length > 0 && (
+            <div className="bead-sequence-editor">
+              <label htmlFor="beadSequence">Bead Sequence:</label>
+              <input
+                type="text"
+                id="beadSequence"
+                value={beadSequenceText}
+                onChange={(e) => setBeadSequenceText(e.target.value)}
+                placeholder="Enter bead sequence (e.g., RYGBWK)"
+                className="bead-sequence-input"
+              />
+              <small>Edit the sequence above to match your bracelet pattern</small>
+            </div>
+          )}
           <h2>Detected Beads</h2>
           {debugInfo && (
             <div className="debug-info">
