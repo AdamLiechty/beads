@@ -1760,7 +1760,7 @@ function App() {
         } else {
           // For specular highlights, we might want to be more lenient
           // If the edge is weak or the colors are very similar, continue grouping
-          const colorDiffThresholdDespiteEdge = 20 * (8 / (currentGroup.length + 1))
+          const colorDiffThresholdDespiteEdge = 20 * (9 / (currentGroup.length + 1))
           if (colorDiff < colorDiffThresholdDespiteEdge) { // Very similar colors
             console.log(`Continuing grouping despite edge - colors very similar (diff: ${colorDiff.toFixed(1)}) (threshold: ${colorDiffThresholdDespiteEdge.toFixed(1)})`)
             currentGroup.push(i + 1)
@@ -1893,7 +1893,13 @@ function App() {
           }
           
           // Classify by hue ranges (adjusted for better blue/green distinction and to include dark greens)
-          if (hue >= 325 || hue < 30) return { category: 'Red', letter: 'R' }      // Red: 325-30°
+          if (hue >= 325 || hue < 30) {
+            // Check if "red" bead should actually be white due to low vibrancy and brightness
+            if (saturation < 0.4 && brightness < 0.8) {
+              return { category: 'White', letter: 'W' }
+            }
+            return { category: 'Red', letter: 'R' }
+          }
           if (hue >= 30 && hue < 90) return { category: 'Yellow', letter: 'Y' }    // Yellow: 30-90°
           if (hue >= 85 && hue < 185) return { category: 'Green', letter: 'G' }    // Green: 85-185° (expanded)
           if (hue >= 185 && hue < 325) return { category: 'Blue', letter: 'B' }    // Blue: 185-325° (adjusted)
