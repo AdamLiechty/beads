@@ -87,10 +87,6 @@
     height: 32px;
   }
   
-  .direction-arrow {
-    display: none;
-  }
-  
   .bead-circle.current-bead {
     transform: scale(1.5);
   }

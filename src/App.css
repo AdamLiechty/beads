@@ -102,6 +102,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
+  min-height: 200px;
 }
 
 .camera-feed, .test-image {
@@ -144,6 +145,8 @@
   font-weight: 600;
   color: #4CAF50;
 }
+
+
 
 .results-section {
   background: rgba(255, 255, 255, 0.1);
@@ -487,9 +490,15 @@
     height: 35px;
   }
   
+  .results-section {
+    display: flex;
+    flex-direction: column;
+  }
+  
   .bead-sequence-editor {
     padding: 1rem;
     margin-bottom: 1rem;
+    order: -1; /* Move above bead sequence on mobile */
   }
   
   .bead-sequence-input {
