@@ -23,6 +23,9 @@ const KRMap = ({ height, width, grid, x, y }) => {
     } else if (typeof cellValue === 'number') {
       cellContent = cellValue;
       cellClass += ' seeds';
+    } else if (cellValue === 0) {
+      cellContent = '0';
+      cellClass += ' seeds';
     }
     
     return (
