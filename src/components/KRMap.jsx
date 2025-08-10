@@ -143,8 +143,10 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBumpedCell(targetPos); // Set the specific snake that was hit
     setBumpDirection(direction); // Set direction for the bounce effect
     
-    // Clear bump states immediately
-    setBumpedCell(null);
+    // Keep bump states for the initial bump animation
+    await new Promise(resolve => setTimeout(resolve, 300)); // Initial bump duration
+    
+    // Clear bump states but keep bumpedCell for snake spin
     setBumpDirection(null);
     
     // Keep snake animation for the spin (only the bumped snake)
@@ -152,9 +154,10 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     
     // Clear snake animation state and immediately start rat return
     setAnimationType(null);
-    setIsReturningToStart(true);
+    setBumpedCell(null); // Clear bumpedCell after spin
+    setIsReturningToStart(false); // Don't spin during return journey
     
-    // Animate rat back to starting position with spin
+    // Animate rat back to starting position without spin
     const startPos = { x, y };
     const steps = 10; // Number of animation steps
     const stepDelay = 50; // Delay between each step
@@ -265,7 +268,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       } else if (bumpDirection) {
         cellClass += ` bump-bounce-${bumpDirection}`;
       }
-      if (isReturningToStart) {
+      if (animationType === 'snake') {
         cellClass += ' animate-snake-spin';
       }
     } else if (cellValue === 'C') {
