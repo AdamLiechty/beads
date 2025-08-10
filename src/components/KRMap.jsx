@@ -61,21 +61,21 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       // Calculate new position based on bead color
       let direction = '';
       switch (bead) {
-        case 'R': // Red = Up
-          newPos.y = Math.max(0, currentPos.y - 1);
-          direction = 'up';
-          break;
-        case 'Y': // Yellow = Right
+        case 'R': // Red = Right
           newPos.x = Math.min(width - 1, currentPos.x + 1);
           direction = 'right';
           break;
-        case 'G': // Green = Down
+        case 'Y': // Yellow = Down
           newPos.y = Math.min(height - 1, currentPos.y + 1);
           direction = 'down';
           break;
-        case 'B': // Blue = Left
+        case 'G': // Green = Left
           newPos.x = Math.max(0, currentPos.x - 1);
           direction = 'left';
+          break;
+        case 'B': // Blue = Up
+          newPos.y = Math.max(0, currentPos.y - 1);
+          direction = 'up';
           break;
         default:
           continue;

@@ -13,30 +13,30 @@ const DirectionPad = () => {
         <div className="arrow-row">
           <div className="arrow-cell"></div>
           <div className="arrow-cell">
-            <div className="arrow up" title="Red">
-              <span>Red</span>
+            <div className="arrow up" title="Blue">
+              <span>Blue</span>
             </div>
           </div>
           <div className="arrow-cell"></div>
         </div>
         <div className="arrow-row">
           <div className="arrow-cell">
-            <div className="arrow left" title="Blue">
-              <span>Blue</span>
+            <div className="arrow left" title="Green">
+              <span>Green</span>
             </div>
           </div>
           <div className="arrow-cell center-cell"></div>
           <div className="arrow-cell">
-            <div className="arrow right" title="Yellow">
-              <span>Yellow</span>
+            <div className="arrow right" title="Red">
+              <span>Red</span>
             </div>
           </div>
         </div>
         <div className="arrow-row">
           <div className="arrow-cell"></div>
           <div className="arrow-cell">
-            <div className="arrow down" title="Green">
-              <span>Green</span>
+            <div className="arrow down" title="Yellow">
+              <span>Yellow</span>
             </div>
           </div>
           <div className="arrow-cell"></div>
