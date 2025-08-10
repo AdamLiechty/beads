@@ -6,6 +6,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   const [score, setScore] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationType, setAnimationType] = useState(null);
+  const [bumpedCell, setBumpedCell] = useState(null);
   const [currentGrid, setCurrentGrid] = useState(grid);
 
   // Only reset position when component first mounts or when x/y coordinates change
@@ -16,6 +17,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   // Only reset grid when component first mounts or when grid prop changes
   useEffect(() => {
     setCurrentGrid(grid);
+    setBumpedCell(null);
   }, [grid]);
 
   // Store onGo callback in ref to avoid dependency issues
@@ -105,9 +107,11 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   };
 
   const animateBump = async (currentPos, targetPos) => {
+    setBumpedCell(targetPos);
     setAnimationType('bump');
     await new Promise(resolve => setTimeout(resolve, 200));
     setAnimationType(null);
+    setBumpedCell(null);
   };
 
   const animateSnakeHit = async (currentPos, targetPos) => {
@@ -143,6 +147,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setCurrentGrid(grid);
     setIsAnimating(false);
     setAnimationType(null);
+    setBumpedCell(null);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -155,6 +160,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setCurrentGrid(grid);
     setIsAnimating(false);
     setAnimationType(null);
+    setBumpedCell(null);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -187,10 +193,12 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       cellClass += ' kangaroo-rat';
     } else if (cellValue === 'C') {
       cellContent = '';
-      cellClass += ` cactus ${animationType === 'bump' ? 'animate-bump' : ''}`;
+      const isBumped = bumpedCell && bumpedCell.x === colIndex && bumpedCell.y === rowIndex;
+      cellClass += ` cactus ${isBumped ? 'animate-bump' : ''}`;
     } else if (cellValue === 'B') {
       cellContent = '';
-      cellClass += ` bush ${animationType === 'bump' ? 'animate-bump' : ''}`;
+      const isBumped = bumpedCell && bumpedCell.x === colIndex && bumpedCell.y === rowIndex;
+      cellClass += ` bush ${isBumped ? 'animate-bump' : ''}`;
     } else if (cellValue === 'R') {
       cellContent = '🐍';
       cellClass += ` rattlesnake ${animationType === 'snake' ? 'animate-snake' : ''}`;
