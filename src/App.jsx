@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import './App.css'
+import DirectionPad from './components/DirectionPad'
 
 const NUM_ELLIPSE_SAMPLES = 200 // Single constant to control both ellipse and sampling
 
@@ -2064,36 +2065,39 @@ function App() {
   return (
     <div className="App">
       <header className="app-header">
-        <h1>Bead Color Detector</h1>
-        <div className="camera-controls">
-          {!isCameraActive ? (
-            <button onClick={startCamera} className="start-btn">
-              Start Camera
-            </button>
-          ) : (
-            <div className="camera-buttons">
-              <button onClick={stopCamera} className="stop-btn">
-                Stop Camera
+        <DirectionPad />
+        <div className="header-content">
+          <h1>Bead Color Detector</h1>
+          <div className="camera-controls">
+            {!isCameraActive ? (
+              <button onClick={startCamera} className="start-btn">
+                Start Camera
               </button>
-              {!isPhotoMode && (
-                <button 
-                  onClick={isTestMode ? handleTakeTestPhoto : handleCapturePhoto} 
-                  className="capture-btn"
-                  disabled={isProcessing}
-                >
-                  📷 Take Photo
+            ) : (
+              <div className="camera-buttons">
+                <button onClick={stopCamera} className="stop-btn">
+                  Stop Camera
                 </button>
-              )}
-              {isPhotoMode && (
-                <button 
-                  onClick={handleRetakePhoto} 
-                  className="retake-btn"
-                >
-                  🔄 Retake
-                </button>
-              )}
-            </div>
-          )}
+                {!isPhotoMode && (
+                  <button 
+                    onClick={isTestMode ? handleTakeTestPhoto : handleCapturePhoto} 
+                    className="capture-btn"
+                    disabled={isProcessing}
+                  >
+                    📷 Take Photo
+                  </button>
+                )}
+                {isPhotoMode && (
+                  <button 
+                    onClick={handleRetakePhoto} 
+                    className="retake-btn"
+                  >
+                    🔄 Retake
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
