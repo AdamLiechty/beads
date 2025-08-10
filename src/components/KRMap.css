@@ -210,6 +210,13 @@
   margin-bottom: 1.5rem;
 }
 
+.kr-map-content {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
 .kr-map-score {
   background: rgba(255, 255, 255, 0.2);
   padding: 0.5rem 1rem;
@@ -218,6 +225,15 @@
   color: white;
   font-weight: 600;
   font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.score-seed-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .kr-map-cell.cactus {

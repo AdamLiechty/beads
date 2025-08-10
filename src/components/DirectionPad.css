@@ -1,5 +1,6 @@
 .direction-pad {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 1rem;
   background: rgba(255, 255, 255, 0.1);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import './KRMap.css';
+import DirectionPad from './DirectionPad';
 
 // Movement speed constant - higher values = slower movement
 const MOVEMENT_SPEED_FACTOR = 4;
@@ -310,21 +311,28 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   return (
     <div className="kr-map-container">
       <div className="kr-map-header">
-        <h3>Kangaroo Rat Habitat</h3>
-        <div className="kr-map-score">Score: {score}</div>
+        <h3>Kangaroo Rat Habitat 🌵🌒</h3>
+        <div className="kr-map-score">
+          <img src="/s1.png" alt="Seed" className="score-seed-icon" />
+          Seeds collected: {score}
+        </div>
       </div>
-      <div 
-        className="kr-map-grid"
-        style={{
-          gridTemplateColumns: `repeat(${width}, 1fr)`,
-          gridTemplateRows: `repeat(${height}, 1fr)`
-        }}
-      >
-        {currentGrid.map((row, rowIndex) => 
-          row.map((cell, colIndex) => 
-            renderCell(cell, rowIndex, colIndex)
-          )
-        )}
+      <div className="kr-map-content">
+        <DirectionPad />
+        <div 
+            className="kr-map-grid"
+            style={{
+            gridTemplateColumns: `repeat(${width}, 1fr)`,
+            gridTemplateRows: `repeat(${height}, 1fr)`
+            }}
+        >
+            {currentGrid.map((row, rowIndex) => 
+            row.map((cell, colIndex) => 
+                renderCell(cell, rowIndex, colIndex)
+            )
+            )}
+        </div>
+
       </div>
     </div>
   );
