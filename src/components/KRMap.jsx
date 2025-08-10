@@ -16,10 +16,15 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   const [isReturningToStart, setIsReturningToStart] = useState(false);
   const [currentGrid, setCurrentGrid] = useState(grid);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [rotation, setRotation] = useState(0); // 0 = default, 90 = up, -90 = down
 
   // Only reset position when component first mounts or when x/y coordinates change
   useEffect(() => {
     setKangarooRatPos({ x, y });
+    // Only reset rotation if we're not currently animating
+    if (!isAnimating) {
+      setRotation(0); // Reset rotation to default
+    }
   }, [x, y]);
 
   // Only reset grid when component first mounts or when grid prop changes
@@ -66,19 +71,23 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
           newPos.x = Math.min(width - 1, currentPos.x + 1);
           direction = 'right';
           setIsFlipped(false); // Face right when moving right (no flip needed for right-facing image)
+          setRotation(0); // Reset to default rotation for left/right movement
           break;
         case 'Y': // Yellow = Down
           newPos.y = Math.min(height - 1, currentPos.y + 1);
           direction = 'down';
+          setRotation(90); // Rotate 90 degrees counterclockwise for down movement
           break;
         case 'G': // Green = Left
           newPos.x = Math.max(0, currentPos.x - 1);
           direction = 'left';
           setIsFlipped(true); // Face left when moving left (flip the right-facing image)
+          setRotation(0); // Reset to default rotation for left/right movement
           break;
         case 'B': // Blue = Up
           newPos.y = Math.max(0, currentPos.y - 1);
           direction = 'up';
+          setRotation(-90); // Rotate 90 degrees clockwise for up movement
           break;
         default:
           continue;
@@ -274,7 +283,9 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
           src="/kr.png" 
           alt="Kangaroo Rat"
           className={`kangaroo-rat-image ${animationType ? `animate-${animationType}` : ''}`}
-          style={{ transform: isFlipped ? 'scaleX(-1)' : 'scaleX(1)' }}
+          style={{ 
+            transform: `${isFlipped ? 'scaleX(-1)' : 'scaleX(1)'} rotate(${rotation}deg)` 
+          }}
         />
       );
       cellClass += ' kangaroo-rat';
