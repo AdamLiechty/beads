@@ -1,6 +1,9 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import './KRMap.css';
 
+// Movement speed constant - higher values = slower movement
+const MOVEMENT_SPEED_FACTOR = 4;
+
 const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpdate, onGo, onGridUpdate }, ref) => {
   const [kangarooRatPos, setKangarooRatPos] = useState({ x, y });
   const [score, setScore] = useState(0);
@@ -120,7 +123,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       }
       
       // Small delay between moves
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 300 * MOVEMENT_SPEED_FACTOR));
     }
   };
 
