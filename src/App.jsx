@@ -1751,7 +1751,7 @@ function App() {
       const colorDiff = colorDistance(sample1.color, sample2.color)
       console.log(`Color diff ${i} ${i+1}: ${colorDiff}, %c${sample1.hex}, %c${sample2.hex}`, `color: #000; background: ${sample1.hex}`, `color: #000; background: ${sample2.hex}`)
       
-      if (colorDiff < 40 && currentGroup.length < NUM_ELLIPSE_SAMPLES / 25) { // Color similarity threshold
+      if (colorDiff < 40 && currentGroup.length < NUM_ELLIPSE_SAMPLES / 20) { // Color similarity threshold
         // Check if there's an edge between them (but be more lenient for specular highlights)
         const hasEdge = hasEdgeBetween(sample1, sample2)
         if (!hasEdge) {
