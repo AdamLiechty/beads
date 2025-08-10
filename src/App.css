@@ -91,7 +91,7 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   min-height: 400px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 
@@ -100,7 +100,7 @@
   width: 100%;
   height: auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 
@@ -151,8 +151,6 @@
   padding: 2rem;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  max-height: 600px;
-  overflow-y: auto;
 }
 
 .results-section h2 {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import './App.css'
 import DirectionPad from './components/DirectionPad'
+import KRMap from './components/KRMap'
 
 const NUM_ELLIPSE_SAMPLES = 200 // Single constant to control both ellipse and sampling
 
@@ -2111,6 +2112,23 @@ function App() {
           </div>
         </div>
       </header>
+
+      <KRMap 
+        height={8}
+        width={8}
+        grid={[
+          [0, 1, 2, 'C', 0, 1, 'B', 0],
+          [1, 'C', 0, 1, 'B', 0, 1, 'C'],
+          [0, 1, 'B', 0, 1, 'C', 0, 1],
+          ['C', 0, 1, 'B', 0, 1, 'R', 0],
+          [1, 'B', 0, 1, 'C', 0, 1, 'B'],
+          [0, 1, 'C', 0, 1, 'B', 0, 1],
+          ['B', 0, 1, 'R', 0, 1, 'C', 0],
+          [1, 'C', 0, 1, 'B', 0, 1, 'B']
+        ]}
+        x={3}
+        y={4}
+      />
 
       <main className="main-content">
         <div className="camera-section">
