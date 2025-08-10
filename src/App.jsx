@@ -38,6 +38,7 @@ function App() {
     ['B', 3, 2, 'R', 1, 4, 'C', 0],
     [5, 0, 0, 2, 'B', 3, 1, 0]
   ]);
+  const [hasCompletedMovement, setHasCompletedMovement] = useState(false);
   const krMapRef = useRef();
 
   // Auto-update bead sequence text when beads are detected
@@ -51,6 +52,12 @@ function App() {
   // Handle KRMap state updates
   const handleKrMapStateChange = (state) => {
     setKrMapState(state);
+    
+    // Track when movement is completed
+    if (!state.isAnimating && hasCompletedMovement === false && state.canStart === true) {
+      // Movement just completed
+      setHasCompletedMovement(true);
+    }
   };
 
   // Handle Go button click
@@ -61,9 +68,23 @@ function App() {
         krMapRef.current.resetToStart();
         // Reset grid when resetting to start
         resetKrMapGrid();
+        setHasCompletedMovement(false);
       } else {
-        // Start movement
-        krMapRef.current.startMovement();
+        // If not animating
+        if (hasCompletedMovement) {
+          // Movement was completed, reset everything
+          krMapRef.current.resetEverything();
+          resetKrMapGrid();
+          setHasCompletedMovement(false);
+        } else if (beadSequenceText && beadSequenceText.length > 0) {
+          // Start movement
+          krMapRef.current.startMovement();
+        } else {
+          // No bead sequence, reset everything
+          krMapRef.current.resetEverything();
+          resetKrMapGrid();
+          setHasCompletedMovement(false);
+        }
       }
     }
   };
@@ -80,6 +101,7 @@ function App() {
       ['B', 3, 2, 'R', 1, 4, 'C', 0],
       [5, 0, 0, 2, 'B', 3, 1, 0]
     ]);
+    setHasCompletedMovement(false);
   };
 
   // Load OpenCV for browser (prevent duplicate loading)
@@ -195,6 +217,7 @@ function App() {
   const startCamera = async () => {
     if (isTestMode) {
       setIsCameraActive(true)
+      setHasCompletedMovement(false)
       return
     }
 
@@ -210,6 +233,7 @@ function App() {
         videoRef.current.srcObject = stream
         setIsCameraActive(true)
         setShowDetectButton(true) // Show detect button when camera is active
+        setHasCompletedMovement(false)
       }
     } catch (error) {
       console.error('Error accessing camera:', error)
@@ -281,6 +305,7 @@ function App() {
     setBraceletCurve(null)
     setDebugInfo('')
     clearOverlay()
+    setHasCompletedMovement(false)
     
     // Force a longer delay to ensure all state updates are processed
     // and React has time to re-render
@@ -323,6 +348,9 @@ function App() {
     if (krMapRef.current) {
       krMapRef.current.resetEverything()
     }
+    
+    // Reset movement completion flag for new photo
+    setHasCompletedMovement(false)
     
     console.log('Photo captured, starting bead detection')
     
@@ -2348,9 +2376,9 @@ function App() {
                 <button
                   onClick={handleGoClick}
                   disabled={!krMapState.canStart}
-                  className={`go-button ${krMapState.isAnimating ? 'reset' : 'go'}`}
+                  className={`go-button ${krMapState.isAnimating ? 'reset' : (hasCompletedMovement ? 'reset-map' : 'go')}`}
                 >
-                  {krMapState.isAnimating ? 'Reset' : 'Go'}
+                  {krMapState.isAnimating ? 'Reset' : (hasCompletedMovement ? 'Reset Map' : 'Go')}
                 </button>
                 <div className="bead-sequence-input-group">
                   <label htmlFor="beadSequence">Bead Sequence:</label>
