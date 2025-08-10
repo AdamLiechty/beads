@@ -467,7 +467,11 @@
     font-size: 1.5rem;
   }
   
-
+  .bead-sequence-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
   
   .bead-item {
     flex-direction: column;
@@ -499,6 +503,17 @@
     padding: 1rem;
     margin-bottom: 1rem;
     order: -1; /* Move above bead sequence on mobile */
+  }
+  
+  .bead-sequence-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  
+  .go-button {
+    align-self: center;
+    min-width: 120px;
   }
   
   .bead-sequence-input {
