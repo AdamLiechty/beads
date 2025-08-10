@@ -442,7 +442,7 @@ function App() {
             canvasSize: `${canvas.width}x${canvas.height}`
           })
           console.log('About to call drawBeadMarkers from photo detection path')
-          drawBeadMarkers(detectedBeads || [], canvas.width, canvas.height, braceletCurve, densityMask, edges, colorSamples)
+          drawBeadMarkers(detectedBeads || [], canvas.width, canvas.height, braceletCurve, densityMask, edges, colorSamples, true)
           console.log('drawBeadMarkers call completed from photo detection path')
           
           // Clean up OpenCV Mats after drawing
@@ -537,12 +537,13 @@ function App() {
   }
 
   // Draw bead markers and bracelet curve on overlay
-  const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null, edges = null, colorSamples = null) => {
+  const drawBeadMarkers = (beads, imageWidth, imageHeight, braceletCurve = null, densityMask = null, edges = null, colorSamples = null, forcePhotoMode = false) => {
     console.log(`drawBeadMarkers called:`, {
       imageWidth,
       imageHeight, 
       isPhotoMode, 
       isTestMode,
+      forcePhotoMode,
       beadsCount: beads?.length || 0,
       callerInfo: new Error().stack.split('\n')[2]?.trim()
     })
@@ -554,16 +555,11 @@ function App() {
       return
     }
     
-    // Safety check: ensure we're in photo mode before drawing
-    if (!isPhotoMode) {
+    // Safety check: ensure we're in photo mode before drawing (unless forced)
+    if (!isPhotoMode && !forcePhotoMode) {
       console.log('Not in photo mode, skipping overlay drawing')
       clearOverlay()
       return
-    }
-    
-    // Debug: Check if we're in a problematic state
-    if (isTestMode && !isPhotoMode) {
-      console.log('drawBeadMarkers called in test mode with photo mode false - allowing but investigating')
     }
     
     const overlayCanvas = overlayCanvasRef.current
