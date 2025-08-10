@@ -1,31 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import './KRMap.css';
 
-const KRMap = ({ height, width, grid, x, y, beadSequence, onScoreUpdate }) => {
+const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpdate, onGo }, ref) => {
   const [kangarooRatPos, setKangarooRatPos] = useState({ x, y });
   const [score, setScore] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationType, setAnimationType] = useState(null);
   const [currentGrid, setCurrentGrid] = useState(grid);
 
-  // Reset position when props change
+  // Only reset position when component first mounts or when x/y coordinates change
   useEffect(() => {
     setKangarooRatPos({ x, y });
-    setScore(0);
-    setCurrentGrid(grid);
-  }, [x, y, grid]);
+  }, [x, y]);
 
-  // Process bead sequence when it changes
+  // Only reset grid when component first mounts or when grid prop changes
   useEffect(() => {
-    if (beadSequence && beadSequence.length > 0) {
-      processBeadSequence(beadSequence);
+    setCurrentGrid(grid);
+  }, [grid]);
+
+  // Store onGo callback in ref to avoid dependency issues
+  const onGoRef = useRef(onGo);
+  onGoRef.current = onGo;
+
+  // Initialize state when component mounts or beadSequence changes
+  useEffect(() => {
+    if (onGoRef.current) {
+      onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
   }, [beadSequence]);
 
+  // Process bead sequence when it changes
+  useEffect(() => {
+    // Don't automatically start moving - wait for user to click Go button
+  }, [beadSequence]);
+
   const processBeadSequence = async (sequence) => {
-    if (isAnimating) return;
-    
-    setIsAnimating(true);
     let currentPos = { ...kangarooRatPos };
     let currentScore = score;
     
@@ -88,8 +97,6 @@ const KRMap = ({ height, width, grid, x, y, beadSequence, onScoreUpdate }) => {
       // Small delay between moves
       await new Promise(resolve => setTimeout(resolve, 300));
     }
-    
-    setIsAnimating(false);
   };
 
   const animateBump = async (currentPos, targetPos) => {
@@ -103,46 +110,101 @@ const KRMap = ({ height, width, grid, x, y, beadSequence, onScoreUpdate }) => {
     await new Promise(resolve => setTimeout(resolve, 300));
     setAnimationType(null);
   };
+
+  // Function to start movement - called from parent component
+  const startMovement = async () => {
+    if (beadSequence && beadSequence.length > 0 && !isAnimating) {
+      // Reset position and score when starting a new movement, but keep grid state
+      setKangarooRatPos({ x, y });
+      setScore(0);
+      // Don't reset the grid - keep eaten seeds eaten
+      
+      setIsAnimating(true);
+      if (onGoRef.current) {
+        onGoRef.current({ isAnimating: true, canStart: false });
+      }
+      await processBeadSequence(beadSequence);
+      setIsAnimating(false);
+      if (onGoRef.current) {
+        onGoRef.current({ isAnimating: false, canStart: true });
+      }
+    }
+  };
+
+  // Function to reset to starting position
+  const resetToStart = () => {
+    setKangarooRatPos({ x, y });
+    setScore(0);
+    setCurrentGrid(grid);
+    setIsAnimating(false);
+    setAnimationType(null);
+    if (onGoRef.current) {
+      onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
+    }
+  };
+
+  // Function to reset everything including seeds - called when new photo is taken
+  const resetEverything = () => {
+    setKangarooRatPos({ x, y });
+    setScore(0);
+    setCurrentGrid(grid);
+    setIsAnimating(false);
+    setAnimationType(null);
+    if (onGoRef.current) {
+      onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
+    }
+  };
+
+    // No need for this useEffect - we'll handle state updates directly in the functions
+
+  // Expose functions to parent component via ref
+  useImperativeHandle(ref, () => ({
+    startMovement,
+    resetToStart,
+    resetEverything,
+    isAnimating
+  }));
+
   const renderCell = (cellValue, rowIndex, colIndex) => {
     const isKangarooRat = rowIndex === kangarooRatPos.y && colIndex === kangarooRatPos.x;
     
     let cellContent = '';
     let cellClass = 'kr-map-cell';
     
-          if (isKangarooRat) {
+    if (isKangarooRat) {
+      cellContent = (
+        <img 
+          src="/kr.png" 
+          alt="Kangaroo Rat"
+          className={`kangaroo-rat-image ${animationType ? `animate-${animationType}` : ''}`}
+        />
+      );
+      cellClass += ' kangaroo-rat';
+    } else if (cellValue === 'C') {
+      cellContent = '🌵';
+      cellClass += ` cactus ${animationType === 'bump' ? 'animate-bump' : ''}`;
+    } else if (cellValue === 'B') {
+      cellContent = '';
+      cellClass += ` bush ${animationType === 'bump' ? 'animate-bump' : ''}`;
+    } else if (cellValue === 'R') {
+      cellContent = '🐍';
+      cellClass += ` rattlesnake ${animationType === 'snake' ? 'animate-snake' : ''}`;
+    } else if (typeof cellValue === 'number') {
+      // Create visual representation of seeds
+      if (cellValue === 0) {
+        cellContent = '';
+      } else {
+        // Display the appropriate seed image based on count
         cellContent = (
           <img 
-            src="/kr.png" 
-            alt="Kangaroo Rat"
-            className={`kangaroo-rat-image ${animationType ? `animate-${animationType}` : ''}`}
+            src={`/s${cellValue}.png`} 
+            alt={`${cellValue} seeds`}
+            className="seed-image"
           />
         );
-        cellClass += ' kangaroo-rat';
-      } else if (cellValue === 'C') {
-        cellContent = '🌵';
-        cellClass += ` cactus ${animationType === 'bump' ? 'animate-bump' : ''}`;
-      } else if (cellValue === 'B') {
-        cellContent = '';
-        cellClass += ` bush ${animationType === 'bump' ? 'animate-bump' : ''}`;
-      } else if (cellValue === 'R') {
-        cellContent = '🐍';
-        cellClass += ` rattlesnake ${animationType === 'snake' ? 'animate-snake' : ''}`;
-      } else if (typeof cellValue === 'number') {
-        // Create visual representation of seeds
-        if (cellValue === 0) {
-          cellContent = '';
-        } else {
-          // Display the appropriate seed image based on count
-          cellContent = (
-            <img 
-              src={`/s${cellValue}.png`} 
-              alt={`${cellValue} seeds`}
-              className="seed-image"
-            />
-          );
-        }
-        cellClass += ' seeds';
       }
+      cellClass += ' seeds';
+    }
     
     return (
       <div 
@@ -155,12 +217,12 @@ const KRMap = ({ height, width, grid, x, y, beadSequence, onScoreUpdate }) => {
     );
   };
 
-      return (
-      <div className="kr-map-container">
-        <div className="kr-map-header">
-          <h3>Kangaroo Rat Habitat</h3>
-          <div className="kr-map-score">Score: {score}</div>
-        </div>
+  return (
+    <div className="kr-map-container">
+      <div className="kr-map-header">
+        <h3>Kangaroo Rat Habitat</h3>
+        <div className="kr-map-score">Score: {score}</div>
+      </div>
       <div 
         className="kr-map-grid"
         style={{
@@ -176,6 +238,6 @@ const KRMap = ({ height, width, grid, x, y, beadSequence, onScoreUpdate }) => {
       </div>
     </div>
   );
-};
+});
 
 export default KRMap;

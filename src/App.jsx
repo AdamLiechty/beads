@@ -27,6 +27,8 @@ function App() {
   const [capturedPhoto, setCapturedPhoto] = useState(null)
   const [isPhotoMode, setIsPhotoMode] = useState(false)
   const [beadSequenceText, setBeadSequenceText] = useState('RYGBWK')
+  const [krMapState, setKrMapState] = useState({ isAnimating: false, canStart: false });
+  const krMapRef = useRef();
 
   // Auto-update bead sequence text when beads are detected
   useEffect(() => {
@@ -35,6 +37,24 @@ function App() {
       setBeadSequenceText(sequence)
     }
   }, [detectedBeads])
+
+  // Handle KRMap state updates
+  const handleKrMapStateChange = (state) => {
+    setKrMapState(state);
+  };
+
+  // Handle Go button click
+  const handleGoClick = () => {
+    if (krMapRef.current) {
+      if (krMapState.isAnimating) {
+        // If currently animating, reset to start
+        krMapRef.current.resetToStart();
+      } else {
+        // Start movement
+        krMapRef.current.startMovement();
+      }
+    }
+  };
 
   // Load OpenCV for browser (prevent duplicate loading)
   useEffect(() => {
@@ -213,6 +233,11 @@ function App() {
     setIsPhotoMode(true)
     setShowDetectButton(false) // Hide detect button since we'll auto-detect
     
+    // Reset KRMap when new photo is taken
+    if (krMapRef.current) {
+      krMapRef.current.resetEverything()
+    }
+    
     console.log('Photo captured, starting bead detection')
     
     // Automatically start bead detection on the captured photo
@@ -348,6 +373,11 @@ function App() {
     // Set states like in photo mode
     setCapturedPhoto(testImageDataUrl)
     setIsPhotoMode(true)
+    
+    // Reset KRMap when new test photo is taken
+    if (krMapRef.current) {
+      krMapRef.current.resetEverything()
+    }
     
     console.log('Test "photo" captured, starting bead detection')
     
@@ -2077,10 +2107,11 @@ function App() {
   return (
     <div className="App">
       <KRMap 
+        ref={krMapRef}
         height={8}
         width={8}
         grid={[
-          [0, 3, 5, 'C', 1, 4, 'B', 2],
+          [0, 3, 5, 'R', 1, 4, 'B', 2],
           [2, 'C', 0, 4, 0, 3, 1, 0],
           [1, 5, 'B', 2, 3, 'C', 0, 4],
           ['C', 0, 3, 0, 5, 1, 'R', 2],
@@ -2093,6 +2124,7 @@ function App() {
         y={4}
         beadSequence={beadSequenceText}
         onScoreUpdate={(score) => console.log('New score:', score)}
+        onGo={handleKrMapStateChange}
       />
 
 <header className="app-header">
@@ -2194,15 +2226,26 @@ function App() {
         <div className="results-section">
           {detectedBeads.length > 0 && (
             <div className="bead-sequence-editor">
-              <label htmlFor="beadSequence">Bead Sequence:</label>
-              <input
-                type="text"
-                id="beadSequence"
-                value={beadSequenceText}
-                onChange={(e) => setBeadSequenceText(e.target.value)}
-                placeholder="Enter bead sequence (e.g., RYGBWK)"
-                className="bead-sequence-input"
-              />
+              <div className="bead-sequence-row">
+                <button
+                  onClick={handleGoClick}
+                  disabled={!krMapState.canStart}
+                  className={`go-button ${krMapState.isAnimating ? 'reset' : 'go'}`}
+                >
+                  {krMapState.isAnimating ? 'Reset' : 'Go'}
+                </button>
+                <div className="bead-sequence-input-group">
+                  <label htmlFor="beadSequence">Bead Sequence:</label>
+                  <input
+                    type="text"
+                    id="beadSequence"
+                    value={beadSequenceText}
+                    onChange={(e) => setBeadSequenceText(e.target.value)}
+                    placeholder="Enter bead sequence (e.g., RYGBWK)"
+                    className="bead-sequence-input"
+                  />
+                </div>
+              </div>
               <small>Edit the sequence above to match your bracelet pattern</small>
             </div>
           )}
