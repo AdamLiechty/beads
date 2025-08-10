@@ -2361,7 +2361,6 @@ function App() {
           {isTestMode && !isCameraActive && (
             <div className="test-image-placeholder">
               <p>Test image loaded: {testImage}</p>
-              <p>Click "Start Detection" to analyze beads</p>
               {!opencvReady && <p>Loading OpenCV...</p>}
             </div>
           )}
@@ -2440,7 +2439,7 @@ function App() {
                 ? "Loading OpenCV..."
                 : isCameraActive 
                   ? (isTestMode ? "Analyzing test image for beads..." : "Point camera at beads to detect colors...")
-                  : (isTestMode ? "Click 'Start Detection' to analyze the test image" : "Start camera to begin detection")
+                  : (isTestMode ? "Click 'Start Camera'" : "Start camera to take photo")
               }
             </p>
           )}
