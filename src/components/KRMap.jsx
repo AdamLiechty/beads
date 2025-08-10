@@ -186,7 +186,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       );
       cellClass += ' kangaroo-rat';
     } else if (cellValue === 'C') {
-      cellContent = '🌵';
+      cellContent = '';
       cellClass += ` cactus ${animationType === 'bump' ? 'animate-bump' : ''}`;
     } else if (cellValue === 'B') {
       cellContent = '';

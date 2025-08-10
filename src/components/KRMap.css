@@ -101,14 +101,25 @@
 }
 
 .kr-map-cell.cactus {
-  background: linear-gradient(45deg, #FFC107, #FFA000);
-  border-color: #D68910;
+  background: #8B7355;
+  border-color: #6B4423;
   border-width: 9px;
+  font-size: 3.45rem;
+  overflow: hidden;
+  position: relative;
+}
+.kr-map-cell.cactus::after {
+  content: '🌵';
+  position: absolute;
+  top: -10%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 3.45rem;
 }
 
 .kr-map-cell.bush {
-  background: linear-gradient(45deg, #FFC107, #FFA000);
-  border-color: #D68910;
+  background: #8B7355;
+  border-color: #6B4423;
   border-width: 9px;
   overflow: hidden;
   position: relative;
@@ -117,10 +128,10 @@
 .kr-map-cell.bush::after {
   content: '🌳';
   position: absolute;
-  top: 14%;
+  top: 4%;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 3rem;
+  font-size: 3.45rem;
 }
 
 .kr-map-cell.rattlesnake {
