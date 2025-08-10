@@ -1,7 +1,7 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import './KRMap.css';
 
-const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpdate, onGo }, ref) => {
+const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpdate, onGo, onGridUpdate }, ref) => {
   const [kangarooRatPos, setKangarooRatPos] = useState({ x, y });
   const [score, setScore] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -88,6 +88,11 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
         const newGrid = [...currentGrid];
         newGrid[newPos.y][newPos.x] = 0;
         setCurrentGrid(newGrid);
+        
+        // Notify parent component of grid update
+        if (onGridUpdate) {
+          onGridUpdate(newGrid);
+        }
       } else {
         // Empty space, move normally
         currentPos = newPos;

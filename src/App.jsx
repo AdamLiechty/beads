@@ -28,6 +28,16 @@ function App() {
   const [isPhotoMode, setIsPhotoMode] = useState(false)
   const [beadSequenceText, setBeadSequenceText] = useState('RYGBWK')
   const [krMapState, setKrMapState] = useState({ isAnimating: false, canStart: false });
+  const [krMapGrid, setKrMapGrid] = useState([
+    [0, 3, 5, 'R', 1, 4, 'B', 2],
+    [2, 'C', 0, 4, 0, 3, 1, 0],
+    [1, 5, 'B', 2, 3, 'C', 0, 4],
+    ['C', 0, 3, 0, 5, 1, 'R', 2],
+    [4, 'B', 1, 0, 0, 0, 2, 'B'],
+    [2, 1, 0, 4, 5, 'B', 3, 1],
+    ['B', 3, 2, 'R', 1, 4, 'C', 0],
+    [5, 0, 0, 2, 'B', 3, 1, 0]
+  ]);
   const krMapRef = useRef();
 
   // Auto-update bead sequence text when beads are detected
@@ -49,11 +59,27 @@ function App() {
       if (krMapState.isAnimating) {
         // If currently animating, reset to start
         krMapRef.current.resetToStart();
+        // Reset grid when resetting to start
+        resetKrMapGrid();
       } else {
         // Start movement
         krMapRef.current.startMovement();
       }
     }
+  };
+
+  // Reset KRMap grid to original state
+  const resetKrMapGrid = () => {
+    setKrMapGrid([
+      [0, 3, 5, 'R', 1, 4, 'B', 2],
+      [2, 'C', 0, 4, 0, 3, 1, 0],
+      [1, 5, 'B', 2, 3, 'C', 0, 4],
+      ['C', 0, 3, 0, 5, 1, 'R', 2],
+      [4, 'B', 1, 0, 0, 0, 2, 'B'],
+      [2, 1, 0, 4, 5, 'B', 3, 1],
+      ['B', 3, 2, 'R', 1, 4, 'C', 0],
+      [5, 0, 0, 2, 'B', 3, 1, 0]
+    ]);
   };
 
   // Load OpenCV for browser (prevent duplicate loading)
@@ -140,6 +166,31 @@ function App() {
     }
   }, [])
 
+  // Handle photo mode changes - ensure state is properly cleared
+  useEffect(() => {
+    if (!isPhotoMode) {
+      // When exiting photo mode, force a complete state reset
+      console.log('Photo mode changed to false, forcing state reset')
+      forceStateReset()
+      
+      // Additional safety: ensure overlay is cleared
+      setTimeout(() => {
+        clearOverlay()
+      }, 100)
+    }
+  }, [isPhotoMode])
+
+  // Cleanup effect - ensure state is reset when component unmounts or when test mode changes
+  useEffect(() => {
+    return () => {
+      // Cleanup function - reset state when component unmounts
+      if (overlayCanvasRef.current) {
+        const ctx = overlayCanvasRef.current.getContext('2d')
+        ctx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
+      }
+    }
+  }, [])
+
   // Initialize camera
   const startCamera = async () => {
     if (isTestMode) {
@@ -175,6 +226,8 @@ function App() {
       setBraceletCurve(null)
       hasRunTestDetectionRef.current = false // Reset test detection flag
       clearOverlay()
+      // Reset KRMap grid when stopping camera in test mode
+      resetKrMapGrid()
       return
     }
 
@@ -189,6 +242,8 @@ function App() {
       setCapturedPhoto(null) // Clear captured photo
       setIsPhotoMode(false) // Exit photo mode
       clearOverlay()
+      // Reset KRMap grid when stopping camera
+      resetKrMapGrid()
     }
   }
 
@@ -197,8 +252,39 @@ function App() {
     const overlayCanvas = overlayCanvasRef.current
     if (overlayCanvas) {
       const ctx = overlayCanvas.getContext('2d')
-      ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
+      // Ensure canvas has proper dimensions before clearing
+      if (overlayCanvas.width > 0 && overlayCanvas.height > 0) {
+        ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
+      } else {
+        // If canvas has no dimensions, set a default size and clear
+        overlayCanvas.width = 800
+        overlayCanvas.height = 600
+        ctx.clearRect(0, 0, 800, 600)
+      }
+      
+      // Additional safety: force a complete redraw by setting canvas dimensions
+      // This ensures any cached content is completely cleared
+      const currentWidth = overlayCanvas.width
+      const currentHeight = overlayCanvas.height
+      overlayCanvas.width = currentWidth
+      overlayCanvas.height = currentHeight
+      
+      // Clear again after dimension reset
+      ctx.clearRect(0, 0, currentWidth, currentHeight)
     }
+  }
+
+  // Force complete state reset
+  const forceStateReset = () => {
+    console.log('Force state reset called - clearing all state')
+    setDetectedBeads([])
+    setBraceletCurve(null)
+    setDebugInfo('')
+    clearOverlay()
+    
+    // Force a longer delay to ensure all state updates are processed
+    // and React has time to re-render
+    return new Promise(resolve => setTimeout(resolve, 100))
   }
 
   // Handle detect beads button click
@@ -249,8 +335,17 @@ function App() {
   }
 
   // Detect beads on a captured photo
-  const detectBeadsOnPhoto = (photoDataUrl) => {
+  const detectBeadsOnPhoto = async (photoDataUrl) => {
     console.log('detectBeadsOnPhoto called with photo data')
+    
+    // Safety check: ensure we don't have leftover beads from previous detection
+    if (detectedBeads.length > 0) {
+      console.log('Warning: detectedBeads array not empty, forcing state reset before detection')
+      await forceStateReset()
+      
+      // Additional safety: wait a bit more to ensure state is fully cleared
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
     
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
@@ -346,7 +441,7 @@ function App() {
   }
 
   // Handle "Take Photo" in test mode - use the test image
-  const handleTakeTestPhoto = () => {
+  const handleTakeTestPhoto = async () => {
     if (!imageRef.current) {
       console.log('No test image available')
       return
@@ -354,10 +449,14 @@ function App() {
     
     console.log('Taking "photo" of test image')
     
-    // Clear any previous state first
-    setDetectedBeads([])
-    setBraceletCurve(null)
+    // Force complete state reset and wait for it to complete
+    await forceStateReset()
+    
+    // Additional safety: ensure overlay is cleared after state reset
     clearOverlay()
+    
+    // Force a small delay to ensure overlay clearing is complete
+    await new Promise(resolve => setTimeout(resolve, 50))
     
     // Create a data URL from the test image for consistency with photo mode
     const canvas = document.createElement('canvas')
@@ -379,12 +478,15 @@ function App() {
       krMapRef.current.resetEverything()
     }
     
+    // Reset grid to original state for new detection
+    resetKrMapGrid()
+    
     console.log('Test "photo" captured, starting bead detection')
     
     // Use the same photo detection function
-    setTimeout(() => {
+    setTimeout(async () => {
       if (opencvReady) {
-        detectBeadsOnPhoto(testImageDataUrl)
+        await detectBeadsOnPhoto(testImageDataUrl)
       }
     }, 100)
   }
@@ -392,17 +494,17 @@ function App() {
 
 
   // Return to live camera view
-  const handleRetakePhoto = () => {
+  const handleRetakePhoto = async () => {
     console.log('Retake clicked - before state change:', { isPhotoMode, isCameraActive, hasVideo: !!videoRef.current })
+    
+    // Force complete state reset and wait for it to complete
+    await forceStateReset()
+    
+    // Reset KRMap grid to original state
+    resetKrMapGrid()
+    
     setCapturedPhoto(null)
     setIsPhotoMode(false)
-    setDetectedBeads([])
-    setBraceletCurve(null)
-    // Clear overlay canvas
-    if (overlayCanvasRef.current) {
-      const overlayCtx = overlayCanvasRef.current.getContext('2d')
-      overlayCtx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height)
-    }
     
     console.log('Retake completed - after state change:', { isPhotoMode: false, isCameraActive, hasVideo: !!videoRef.current })
   }
@@ -417,6 +519,20 @@ function App() {
       beadsCount: beads?.length || 0,
       callerInfo: new Error().stack.split('\n')[2]?.trim()
     })
+    
+    // Safety check: if no beads, don't draw anything and clear overlay
+    if (!beads || beads.length === 0) {
+      console.log('No beads to draw, clearing overlay')
+      clearOverlay()
+      return
+    }
+    
+    // Safety check: ensure we're in photo mode before drawing
+    if (!isPhotoMode) {
+      console.log('Not in photo mode, skipping overlay drawing')
+      clearOverlay()
+      return
+    }
     
     // Debug: Check if we're in a problematic state
     if (isTestMode && !isPhotoMode) {
@@ -483,7 +599,17 @@ function App() {
     overlayCanvas.height = displayRect.height
 
     const ctx = overlayCanvas.getContext('2d')
+    
+    // Ensure we have a clean slate - clear the entire canvas
     ctx.clearRect(0, 0, displayRect.width, displayRect.height)
+    
+    // Additional safety: fill with transparent background to ensure complete clearing
+    ctx.fillStyle = 'rgba(0, 0, 0, 0)'
+    ctx.fillRect(0, 0, displayRect.width, displayRect.height)
+    
+    // Force canvas redraw to ensure any cached content is cleared
+    overlayCanvas.width = displayRect.width
+    overlayCanvas.height = displayRect.height
 
     // Draw density overlay (heat map)
     if (densityMask) {
@@ -2110,21 +2236,13 @@ function App() {
         ref={krMapRef}
         height={8}
         width={8}
-        grid={[
-          [0, 3, 5, 'R', 1, 4, 'B', 2],
-          [2, 'C', 0, 4, 0, 3, 1, 0],
-          [1, 5, 'B', 2, 3, 'C', 0, 4],
-          ['C', 0, 3, 0, 5, 1, 'R', 2],
-          [4, 'B', 1, 0, 0, 0, 2, 'B'],
-          [2, 1, 0, 4, 5, 'B', 3, 1],
-          ['B', 3, 2, 'R', 1, 4, 'C', 0],
-          [5, 0, 0, 2, 'B', 3, 1, 0]
-        ]}
+        grid={krMapGrid}
         x={3}
         y={4}
         beadSequence={beadSequenceText}
         onScoreUpdate={(score) => console.log('New score:', score)}
         onGo={handleKrMapStateChange}
+        onGridUpdate={setKrMapGrid}
       />
 
 <header className="app-header">
