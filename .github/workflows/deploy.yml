@@ -57,7 +57,13 @@ jobs:
         echo "Building with Vite..."
         echo "Vite version: $(npx vite --version)"
         echo "Build command: npx vite build --mode production"
-        npx vite build --mode production
+        npx vite build --mode production || {
+          echo "Build failed! Checking for errors..."
+          echo "Current directory: $(pwd)"
+          echo "Directory contents: $(ls -la)"
+          echo "Node modules: $(ls -la node_modules/.bin/)"
+          exit 1
+        }
         echo "Build output:"
         ls -la dist/
         echo "HTML content:"
@@ -67,6 +73,16 @@ jobs:
         grep -r "beads" dist/ || echo "No 'beads' found in dist"
         echo "Checking Vite config being used..."
         cat vite.config.js
+        echo "Verifying build succeeded..."
+        if [ ! -d "dist" ]; then
+          echo "ERROR: dist directory not created!"
+          exit 1
+        fi
+        if [ ! -f "dist/index.html" ]; then
+          echo "ERROR: dist/index.html not found!"
+          exit 1
+        fi
+        echo "Build verification passed!"
       
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
