@@ -120,6 +120,35 @@ public/
 - **Computer Vision**: Contour detection and shape analysis
 - **CSS Grid & Flexbox**: Responsive layout
 
+## Deployment
+
+### GitHub Pages Deployment
+
+This app is configured for automatic deployment to GitHub Pages.
+
+#### Prerequisites
+- GitHub repository with your code
+- GitHub Actions enabled
+
+#### Automatic Deployment (Recommended)
+1. Push your code to the `main` branch
+2. GitHub Actions will automatically build and deploy to GitHub Pages
+3. Your app will be available at `https://yourusername.github.io/beads/`
+
+#### Manual Deployment
+1. Install dependencies: `npm install`
+2. Build the project: `npm run build`
+3. Deploy to GitHub Pages: `npm run deploy`
+
+#### Configuration
+- **Base Path**: Automatically set to `/beads/` for production builds
+- **Build Output**: `dist/` directory
+- **Deployment Branch**: `gh-pages` (automatically created)
+
+### Environment Variables
+- `NODE_ENV`: Automatically set by build process
+- `GITHUB_TOKEN`: Automatically provided by GitHub Actions
+
 ## Troubleshooting
 
 ### Camera Not Working
