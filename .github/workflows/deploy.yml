@@ -48,12 +48,19 @@ jobs:
         
     - name: Build
       run: |
+        echo "Current NODE_ENV: $NODE_ENV"
+        echo "Setting NODE_ENV=production..."
         export NODE_ENV=production
+        echo "NODE_ENV after export: $NODE_ENV"
+        echo "Building with Vite..."
         npx vite build
         echo "Build output:"
         ls -la dist/
         echo "HTML content:"
         cat dist/index.html
+        echo "Checking for base path in built files..."
+        grep -r "src/main.jsx" dist/ || echo "No src/main.jsx found in dist"
+        grep -r "beads" dist/ || echo "No 'beads' found in dist"
       
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
