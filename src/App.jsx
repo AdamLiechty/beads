@@ -254,13 +254,17 @@ function App() {
     // Get image data and run detection
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const result = detectBeadsWithOpenCV(imageData.data, canvas.width, canvas.height) || { beads: [], densityMask: null, edges: null, colorSamples: [] }
+      console.log('Result from detectBeadsWithOpenCV:', result)
       const detectedBeads = result.beads || []
       const densityMask = result.densityMask
       const edges = result.edges
       const colorSamples = result.colorSamples || []
+      const braceletCurve = result.braceletCurve || null
       
       console.log(`Photo detection completed: ${detectedBeads.length} beads found`)
+      console.log('detectedBeads array:', detectedBeads)
       setDetectedBeads(detectedBeads)
+      setBraceletCurve(braceletCurve)
       
       // Draw results on overlay after ensuring the photo image is fully rendered
       let retryCount = 0
@@ -856,6 +860,189 @@ function App() {
   const colorSamples = findBeadsAlongEllipse(data, width, height, filledDensityMap, braceletCurveData)
   const beads = groupSamplesIntoBeads(colorSamples, edges, width, height)
       
+      // Order beads based on black/white bead presence and position
+      if (beads && beads.length > 0) {
+        const imageCenterX = width / 2
+        const imageCenterY = height / 2
+        
+        // Helper function to calculate angle from center
+        const getAngleFromCenter = (bead) => {
+          const angle = Math.atan2(bead.centerY - imageCenterY, bead.centerX - imageCenterX)
+          return angle < 0 ? angle + 2 * Math.PI : angle
+        }
+        
+        // Helper function to calculate distance between two beads
+        const getDistanceBetweenBeads = (bead1, bead2) => {
+          const dx = bead1.centerX - bead2.centerX
+          const dy = bead1.centerY - bead2.centerY
+          return Math.sqrt(dx * dx + dy * dy)
+        }
+        
+        // Find black and white beads
+        const blackBeads = beads.filter(bead => bead.category === 'Black')
+        const whiteBeads = beads.filter(bead => bead.category === 'White')
+        
+        console.log(`Found ${blackBeads.length} black beads and ${whiteBeads.length} white beads`)
+        
+        // Debug: log all bead categories to see what's being detected
+        console.log('All bead categories:', beads.map(b => ({ category: b.category, hex: b.hex, center: `(${b.centerX.toFixed(1)}, ${b.centerY.toFixed(1)})` })))
+        
+        if (blackBeads.length > 0) {
+          console.log('Black beads found:', blackBeads.map(b => ({ hex: b.hex, center: `(${b.centerX.toFixed(1)}, ${b.centerY.toFixed(1)})` })))
+        }
+        
+        let orderedBeads = []
+        
+        if (blackBeads.length > 0 && whiteBeads.length > 0) {
+          // Both black and white beads exist - find closest pair
+          let bestBlackBead = blackBeads[0]
+          let bestWhiteBead = whiteBeads[0]
+          let minDistance = Infinity
+          
+          for (const blackBead of blackBeads) {
+            for (const whiteBead of whiteBeads) {
+              const distance = getDistanceBetweenBeads(blackBead, whiteBead)
+              if (distance < minDistance) {
+                minDistance = distance
+                bestBlackBead = blackBead
+                bestWhiteBead = whiteBead
+              }
+            }
+          }
+          
+          console.log(`Using black bead at (${bestBlackBead.centerX.toFixed(1)}, ${bestBlackBead.centerY.toFixed(1)}) and white bead at (${bestWhiteBead.centerX.toFixed(1)}, ${bestWhiteBead.centerY.toFixed(1)})`)
+          
+          // Start with black bead, go in the direction that makes white bead last
+          const blackAngle = getAngleFromCenter(bestBlackBead)
+          const whiteAngle = getAngleFromCenter(bestWhiteBead)
+          
+          // Determine if we should go clockwise or counterclockwise
+          // We want the black bead first and white bead last
+          let direction = 1 // 1 for clockwise, -1 for counterclockwise
+          
+          // Calculate the angle difference from black to white
+          let angleDiff = whiteAngle - blackAngle
+          if (angleDiff < 0) angleDiff += 2 * Math.PI
+          
+          // If the white bead is clockwise from the black bead, go counterclockwise around the circle
+          // If the white bead is counterclockwise from the black bead, go clockwise around the circle
+          if (angleDiff <= Math.PI) {
+            direction = -1
+          }
+          
+          console.log(`Black bead at angle ${(blackAngle * 180 / Math.PI).toFixed(1)}°, white bead at angle ${(whiteAngle * 180 / Math.PI).toFixed(1)}°`)
+          console.log(`Angle difference: ${(angleDiff * 180 / Math.PI).toFixed(1)}°`)
+          console.log(`White bead is ${angleDiff <= Math.PI ? 'clockwise' : 'counterclockwise'} from black bead`)
+          console.log(`Going ${direction > 0 ? 'clockwise' : 'counterclockwise'} around the circle to end with white bead`)
+          
+          // Create circular ordering starting from black bead
+          // If white bead is clockwise from black, go counterclockwise around the entire circle
+          // If white bead is counterclockwise from black, go clockwise around the entire circle
+          const beadsCopy = [...beads]
+          
+          if (direction > 0) {
+            // Clockwise: white bead is counterclockwise from black, so go clockwise
+            orderedBeads = beadsCopy.sort((a, b) => {
+              const angleA = getAngleFromCenter(a)
+              const angleB = getAngleFromCenter(b)
+              
+              // Adjust angles relative to black bead
+              let adjustedAngleA = angleA - blackAngle
+              let adjustedAngleB = angleB - blackAngle
+              
+              // Ensure angles are positive
+              if (adjustedAngleA < 0) adjustedAngleA += 2 * Math.PI
+              if (adjustedAngleB < 0) adjustedAngleB += 2 * Math.PI
+              
+              return adjustedAngleA - adjustedAngleB
+            })
+          } else {
+            // Counterclockwise: white bead is clockwise from black, so go counterclockwise
+            orderedBeads = beadsCopy.sort((a, b) => {
+              const angleA = getAngleFromCenter(a)
+              const angleB = getAngleFromCenter(b)
+              
+              // Adjust angles relative to black bead
+              let adjustedAngleA = angleA - blackAngle
+              let adjustedAngleB = angleB - blackAngle
+              
+              // Ensure angles are positive
+              if (adjustedAngleA < 0) adjustedAngleA += 2 * Math.PI
+              if (adjustedAngleB < 0) adjustedAngleB += 2 * Math.PI
+              
+              // For counterclockwise, reverse the order
+              return adjustedAngleB - adjustedAngleA
+            })
+          }
+          
+        } else if (blackBeads.length > 0 || whiteBeads.length > 0) {
+          // Only one type exists - start at any of them and go clockwise
+          const referenceBeads = blackBeads.length > 0 ? blackBeads : whiteBeads
+          const referenceBead = referenceBeads[0]
+          
+          console.log(`Starting at ${referenceBead.category} bead at (${referenceBead.centerX.toFixed(1)}, ${referenceBead.centerY.toFixed(1)})`)
+          
+          // Sort all beads by angle, starting from reference bead (create a copy first)
+          const referenceAngle = getAngleFromCenter(referenceBead)
+          orderedBeads = [...beads].sort((a, b) => {
+            const angleA = getAngleFromCenter(a)
+            const angleB = getAngleFromCenter(b)
+            
+            // Adjust angles relative to reference bead
+            let adjustedAngleA = angleA - referenceAngle
+            let adjustedAngleB = angleB - referenceAngle
+            
+            // Ensure angles are positive
+            if (adjustedAngleA < 0) adjustedAngleA += 2 * Math.PI
+            if (adjustedAngleB < 0) adjustedAngleB += 2 * Math.PI
+            
+            return adjustedAngleA - adjustedAngleB
+          })
+          
+        } else {
+          // No black or white beads - start at top of image and go clockwise
+          console.log('No black or white beads found, starting at top of image')
+          
+          // Top of image is at angle -π/2 (270°)
+          const topAngle = -Math.PI / 2
+          
+          orderedBeads = [...beads].sort((a, b) => {
+            const angleA = getAngleFromCenter(a)
+            const angleB = getAngleFromCenter(b)
+            
+            // Adjust angles relative to top of image
+            let adjustedAngleA = angleA - topAngle
+            let adjustedAngleB = angleB - topAngle
+            
+            // Ensure angles are positive
+            if (adjustedAngleA < 0) adjustedAngleA += 2 * Math.PI
+            if (adjustedAngleB < 0) adjustedAngleB += 2 * Math.PI
+            
+            return adjustedAngleA - adjustedAngleB
+          })
+        }
+        
+        // Update the beads array with the ordered beads
+        beads.length = 0
+        beads.push(...orderedBeads)
+        
+        console.log('Beads reordered based on black/white presence')
+        console.log(`After reordering: ${beads.length} beads in array`)
+        console.log('First few beads:', beads.slice(0, 3).map(b => ({ category: b.category, center: `(${b.centerX}, ${b.centerY})` })))
+        
+        // Debug: verify the first bead is black if black beads exist
+        if (blackBeads.length > 0 && beads.length > 0) {
+          const firstBead = beads[0]
+          console.log(`First bead after reordering: ${firstBead.category} (${firstBead.hex}) at (${firstBead.centerX.toFixed(1)}, ${firstBead.centerY.toFixed(1)})`)
+          if (firstBead.category === 'Black') {
+            console.log('✅ SUCCESS: Black bead is first!')
+          } else {
+            console.log('❌ FAILURE: Black bead is NOT first!')
+            console.log('Expected black bead first, but got:', firstBead.category)
+          }
+        }
+      }
+      
       // Store bracelet curve for visualization
       setBraceletCurve(braceletCurve)
       console.log(`Bracelet curve stored for visualization: ${braceletCurve ? braceletCurve.length : 0} points`)
@@ -885,11 +1072,13 @@ function App() {
       braceletContourVector.delete()
       
       console.log(`Found ${beads.length} beads along the bracelet curve`)
-      return { beads, densityMask: densityMapClone, edges: edgesClone, colorSamples }
+      console.log('Returning beads array with length:', beads.length)
+      console.log('Beads array contents:', beads)
+      return { beads, densityMask: densityMapClone, edges: edgesClone, colorSamples, braceletCurve }
       
     } catch (error) {
       console.error('Error in OpenCV detection:', error)
-      return { beads: [], densityMask: null, edges: null, colorSamples: [] }
+      return { beads: [], densityMask: null, edges: null, colorSamples: [], braceletCurve: null }
     }
   }
 
@@ -1444,7 +1633,7 @@ function App() {
           if (saturation < 0.15 && brightness > 0.8) return { category: 'White', letter: 'W' }
           
           // Check for black (very low brightness AND low saturation, to avoid dark colored beads)
-          if (brightness < 0.08 || (brightness < 0.12 && saturation < 0.15)) return { category: 'Black', letter: 'K' }
+          if (brightness < 0.15 || (brightness < 0.20 && saturation < 0.20)) return { category: 'Black', letter: 'K' }
           
           // Calculate hue for colored pixels
           let hue = 0
@@ -1753,7 +1942,7 @@ function App() {
     const colorSamples = result.colorSamples || []
     console.log(`Beads found: ${detectedBeads.length}`)
 
-    // Sort beads along the bracelet curve path
+    // Sort beads along the bracelet curve path (simple angle-based sorting)
     const imageCenterX = width / 2
     const imageCenterY = height / 2
     
