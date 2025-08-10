@@ -457,15 +457,23 @@ function App() {
     // Draw density overlay (heat map)
     if (densityMask) {
       console.log('Drawing density mask overlay')
-      const densityImageData = ctx.createImageData(displayRect.width, displayRect.height)
       
-      for (let y = 0; y < displayRect.height; y++) {
-        for (let x = 0; x < displayRect.width; x++) {
-          const idx = (y * displayRect.width + x) * 4
+      // Create a temporary canvas for the density mask at the scaled size
+      const tempCanvas = document.createElement('canvas')
+      tempCanvas.width = overlayWidth
+      tempCanvas.height = overlayHeight
+      const tempCtx = tempCanvas.getContext('2d')
+      
+      // Create density image data at the scaled size
+      const densityImageData = tempCtx.createImageData(overlayWidth, overlayHeight)
+      
+      for (let y = 0; y < overlayHeight; y++) {
+        for (let x = 0; x < overlayWidth; x++) {
+          const idx = (y * overlayWidth + x) * 4
           
-          // Map display coordinates back to original image coordinates
-          const origX = Math.floor((x - offsetX) / uniformScale)
-          const origY = Math.floor((y - offsetY) / uniformScale)
+          // Map scaled coordinates back to original image coordinates
+          const origX = Math.floor(x / uniformScale)
+          const origY = Math.floor(y / uniformScale)
           
           if (origX >= 0 && origX < imageWidth && origY >= 0 && origY < imageHeight) {
             const densityValue = densityMask.ucharPtr(origY, origX)[0]
@@ -487,7 +495,10 @@ function App() {
         }
       }
       
-      ctx.putImageData(densityImageData, 0, 0)
+      tempCtx.putImageData(densityImageData, 0, 0)
+      
+      // Draw the properly sized density overlay at the correct position
+      ctx.drawImage(tempCanvas, offsetX, offsetY)
     }
 
     // Draw grouped beads as circles (first, so they appear behind the sample dots)
