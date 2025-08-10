@@ -15,6 +15,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
   const [boundaryBounce, setBoundaryBounce] = useState(null);
   const [isReturningToStart, setIsReturningToStart] = useState(false);
   const [currentGrid, setCurrentGrid] = useState(grid);
+  const [isFlipped, setIsFlipped] = useState(false);
 
   // Only reset position when component first mounts or when x/y coordinates change
   useEffect(() => {
@@ -64,6 +65,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
         case 'R': // Red = Right
           newPos.x = Math.min(width - 1, currentPos.x + 1);
           direction = 'right';
+          setIsFlipped(false); // Face right when moving right (no flip needed for right-facing image)
           break;
         case 'Y': // Yellow = Down
           newPos.y = Math.min(height - 1, currentPos.y + 1);
@@ -72,6 +74,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
         case 'G': // Green = Left
           newPos.x = Math.max(0, currentPos.x - 1);
           direction = 'left';
+          setIsFlipped(true); // Face left when moving left (flip the right-facing image)
           break;
         case 'B': // Blue = Up
           newPos.y = Math.max(0, currentPos.y - 1);
@@ -121,6 +124,14 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
         // Empty space, move normally
         currentPos = newPos;
         setKangarooRatPos(currentPos);
+      }
+      
+      // Always update the rat's facing direction after any successful movement
+      // This ensures the rat faces the direction it just moved, even when eating seeds
+      if (direction === 'left') {
+        setIsFlipped(true);
+      } else if (direction === 'right') {
+        setIsFlipped(false);
       }
       
       // Small delay between moves
@@ -194,6 +205,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
       setScore(0);
       // Don't reset the grid - keep eaten seeds eaten
       
+      setIsFlipped(false); // Reset flip state when starting new movement
       setIsAnimating(true);
       if (onGoRef.current) {
         onGoRef.current({ isAnimating: true, canStart: false });
@@ -217,6 +229,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBumpDirection(null);
     setBoundaryBounce(null);
     setIsReturningToStart(false);
+    setIsFlipped(false);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -233,6 +246,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
     setBumpDirection(null);
     setBoundaryBounce(null);
     setIsReturningToStart(false);
+    setIsFlipped(false);
     if (onGoRef.current) {
       onGoRef.current({ isAnimating: false, canStart: beadSequence && beadSequence.length > 0 });
     }
@@ -260,6 +274,7 @@ const KRMap = forwardRef(({ height, width, grid, x, y, beadSequence, onScoreUpda
           src="/kr.png" 
           alt="Kangaroo Rat"
           className={`kangaroo-rat-image ${animationType ? `animate-${animationType}` : ''}`}
+          style={{ transform: isFlipped ? 'scaleX(-1)' : 'scaleX(1)' }}
         />
       );
       cellClass += ' kangaroo-rat';
