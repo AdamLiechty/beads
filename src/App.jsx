@@ -942,7 +942,20 @@ function App() {
           
           if (direction > 0) {
             // Clockwise: white bead is counterclockwise from black, so go clockwise
+            console.log('Using CLOCKWISE ordering')
+            
+            // Debug: log the first few beads before sorting
+            console.log('First few beads before clockwise sorting:', beadsCopy.slice(0, 3).map(b => ({ 
+              category: b.category, 
+              angle: (getAngleFromCenter(b) * 180 / Math.PI).toFixed(1) + '°',
+              adjustedAngle: ((getAngleFromCenter(b) - blackAngle + 2 * Math.PI) % (2 * Math.PI) * 180 / Math.PI).toFixed(1) + '°'
+            })))
+            
             orderedBeads = beadsCopy.sort((a, b) => {
+              // Special case: black bead should always come first
+              if (a.category === 'Black') return -1
+              if (b.category === 'Black') return 1
+              
               const angleA = getAngleFromCenter(a)
               const angleB = getAngleFromCenter(b)
               
@@ -956,9 +969,29 @@ function App() {
               
               return adjustedAngleA - adjustedAngleB
             })
+            
+            // Debug: log the first few beads after sorting
+            console.log('First few beads after clockwise sorting:', orderedBeads.slice(0, 3).map(b => ({ 
+              category: b.category, 
+              angle: (getAngleFromCenter(b) * 180 / Math.PI).toFixed(1) + '°',
+              adjustedAngle: ((getAngleFromCenter(b) - blackAngle + 2 * Math.PI) % (2 * Math.PI) * 180 / Math.PI).toFixed(1) + '°'
+            })))
           } else {
             // Counterclockwise: white bead is clockwise from black, so go counterclockwise
+            console.log('Using COUNTERCLOCKWISE ordering')
+            
+            // Debug: log the first few beads before sorting
+            console.log('First few beads before counterclockwise sorting:', beadsCopy.slice(0, 3).map(b => ({ 
+              category: b.category, 
+              angle: (getAngleFromCenter(b) * 180 / Math.PI).toFixed(1) + '°',
+              adjustedAngle: ((getAngleFromCenter(b) - blackAngle + 2 * Math.PI) % (2 * Math.PI) * 180 / Math.PI).toFixed(1) + '°'
+            })))
+            
             orderedBeads = beadsCopy.sort((a, b) => {
+              // Special case: black bead should always come first
+              if (a.category === 'Black') return -1
+              if (b.category === 'Black') return 1
+              
               const angleA = getAngleFromCenter(a)
               const angleB = getAngleFromCenter(b)
               
@@ -970,9 +1003,17 @@ function App() {
               if (adjustedAngleA < 0) adjustedAngleA += 2 * Math.PI
               if (adjustedAngleB < 0) adjustedAngleB += 2 * Math.PI
               
-              // For counterclockwise, reverse the order
+              // For counterclockwise, we want to go backwards from black bead
+              // So we reverse the comparison to go counterclockwise
               return adjustedAngleB - adjustedAngleA
             })
+            
+            // Debug: log the first few beads after sorting
+            console.log('First few beads after counterclockwise sorting:', orderedBeads.slice(0, 3).map(b => ({ 
+              category: b.category, 
+              angle: (getAngleFromCenter(b) * 180 / Math.PI).toFixed(1) + '°',
+              adjustedAngle: ((getAngleFromCenter(b) - blackAngle + 2 * Math.PI) % (2 * Math.PI) * 180 / Math.PI).toFixed(1) + '°'
+            })))
           }
           
         } else if (blackBeads.length > 0 || whiteBeads.length > 0) {
