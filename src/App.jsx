@@ -1440,9 +1440,11 @@ function App() {
           const brightness = max
           const saturation = max === 0 ? 0 : (max - min) / max
           
-          // Check for black/white first
-          if (brightness < 0.2) return { category: 'Black', letter: '' }
+          // Check for white first (high brightness, low saturation)
           if (saturation < 0.15 && brightness > 0.8) return { category: 'White', letter: 'W' }
+          
+          // Check for black (very low brightness AND low saturation, to avoid dark colored beads)
+          if (brightness < 0.08 || (brightness < 0.12 && saturation < 0.15)) return { category: 'Black', letter: '' }
           
           // Calculate hue for colored pixels
           let hue = 0
@@ -1459,16 +1461,19 @@ function App() {
             if (hue < 0) hue += 360
           }
           
-          // Classify by hue ranges
-          if (hue >= 315 || hue < 45) return { category: 'Red', letter: 'R' }      // Red: 315-45°
-          if (hue >= 45 && hue < 135) return { category: 'Yellow', letter: 'Y' }   // Yellow: 45-135°
-          if (hue >= 135 && hue < 225) return { category: 'Green', letter: 'G' }   // Green: 135-225°
-          if (hue >= 225 && hue < 315) return { category: 'Blue', letter: 'B' }    // Blue: 225-315°
+          // Classify by hue ranges (adjusted for better blue/green distinction and to include dark greens)
+          if (hue >= 325 || hue < 30) return { category: 'Red', letter: 'R' }      // Red: 325-30°
+          if (hue >= 30 && hue < 90) return { category: 'Yellow', letter: 'Y' }    // Yellow: 30-90°
+          if (hue >= 85 && hue < 185) return { category: 'Green', letter: 'G' }    // Green: 85-185° (expanded)
+          if (hue >= 185 && hue < 325) return { category: 'Blue', letter: 'B' }    // Blue: 185-325° (adjusted)
           
           return { category: 'Unknown', letter: '?' }
         }
         
         const colorClass = classifyColor(avgColor[0], avgColor[1], avgColor[2])
+        const hexValue = rgbToHex(avgColor[0], avgColor[1], avgColor[2])
+        
+        console.log(`Bead detected: ${hexValue} → ${colorClass.category} (${colorClass.letter || 'no letter'})`)
         
         beads.push({
           centerX: avgX,
@@ -1925,7 +1930,20 @@ function App() {
               <div className="beads-sequence">
                 {detectedBeads.map((bead, index) => (
                   <div key={index} className="bead-item-compact">
-                    <div className="bead-number" title={`${bead.category} (${index + 1})`}>
+                    <div 
+                      className="bead-number" 
+                      title={`${bead.category} (${index + 1})`}
+                      style={{
+                        backgroundColor: bead.category === 'Red' ? '#ff0000' :
+                                       bead.category === 'Yellow' ? '#ffff00' :
+                                       bead.category === 'Green' ? '#00ff00' :
+                                       bead.category === 'Blue' ? '#0000ff' :
+                                       bead.category === 'White' ? '#ffffff' :
+                                       bead.category === 'Black' ? '#000000' :
+                                       '#ff6b6b', // fallback gradient
+                        color: bead.category === 'Yellow' || bead.category === 'White' ? '#000000' : '#ffffff'
+                      }}
+                    >
                       {bead.letter || (index + 1)}
                     </div>
                     <div 
