@@ -5,41 +5,47 @@ const DirectionPad = () => {
   return (
     <div className="direction-pad">
       <div className="start-dot">
-        <div className="dot black"></div>
-        <span>Start</span>
+        <div className="dot black">
+          <span>Start</span>
+        </div>
       </div>
       <div className="arrow-grid">
         <div className="arrow-row">
           <div className="arrow-cell"></div>
           <div className="arrow-cell">
-            <div className="arrow up" title="Red">▲</div>
-            <span>Red</span>
+            <div className="arrow up" title="Red">
+              <span>Red</span>
+            </div>
           </div>
           <div className="arrow-cell"></div>
         </div>
         <div className="arrow-row">
           <div className="arrow-cell">
-            <div className="arrow left" title="Blue">◀</div>
-            <span>Blue</span>
+            <div className="arrow left" title="Blue">
+              <span>Blue</span>
+            </div>
           </div>
           <div className="arrow-cell center-cell"></div>
           <div className="arrow-cell">
-            <div className="arrow right" title="Yellow">▶</div>
-            <span>Yellow</span>
+            <div className="arrow right" title="Yellow">
+              <span>Yellow</span>
+            </div>
           </div>
         </div>
         <div className="arrow-row">
           <div className="arrow-cell"></div>
           <div className="arrow-cell">
-            <div className="arrow down" title="Green">▼</div>
-            <span>Green</span>
+            <div className="arrow down" title="Green">
+              <span>Green</span>
+            </div>
           </div>
           <div className="arrow-cell"></div>
         </div>
       </div>
       <div className="end-dot">
-        <div className="dot white"></div>
-        <span>End</span>
+        <div className="dot white">
+          <span>End</span>
+        </div>
       </div>
     </div>
   );
