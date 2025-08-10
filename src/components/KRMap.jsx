@@ -21,10 +21,19 @@ const KRMap = ({ height, width, grid, x, y }) => {
       cellContent = '🐍';
       cellClass += ' rattlesnake';
     } else if (typeof cellValue === 'number') {
-      cellContent = cellValue;
-      cellClass += ' seeds';
-    } else if (cellValue === 0) {
-      cellContent = '0';
+      // Create visual representation of seeds
+      if (cellValue === 0) {
+        cellContent = '';
+      } else {
+        // Display the appropriate seed image based on count
+        cellContent = (
+          <img 
+            src={`/s${cellValue}.png`} 
+            alt={`${cellValue} seeds`}
+            className="seed-image"
+          />
+        );
+      }
       cellClass += ' seeds';
     }
     

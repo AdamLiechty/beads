@@ -74,7 +74,16 @@
 .kr-map-cell.seeds {
   background: linear-gradient(45deg, #FFC107, #FFA000);
   border-color: #FFC107;
-  font-size: 1rem;
+  font-size: 1.2rem;
+  flex-wrap: wrap;
+  padding: 2px;
+}
+
+.seed-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
 }
 
 .kr-map-legend {
@@ -112,6 +121,10 @@
     min-width: 45px;
     min-height: 45px;
     font-size: 2.5rem;
+  }
+  
+  .kr-map-cell.seeds {
+    font-size: 1.8rem;
   }
   
   .kr-map-legend {
