@@ -1,24 +1,55 @@
-# Bead Color Detector
+# Kangaroo Rat Game
 
-A React single-page application that uses your device's camera to detect individual beads and extract their colors in the order they appear on a string or bracelet.
+Live at https://kr.levitable.org
 
-## Features
+A React-based game where you control a kangaroo rat that moves around a grid, following a sequences of beads that code for directions on the grid, eating seeds avoiding snakes. Use this to introduce kids to the idea of an algorithm... in this case, by adding colored beads onto a bracelet that stand for UP, RIGHT, DOWN, and LEFT.
 
-- 📹 **Real-time Camera Feed**: Live camera stream in the top-left section
-- 🎯 **Individual Bead Detection**: Identifies each bead as a separate circular object
-- 🔢 **Ordered Color Sequence**: Displays colors in the exact order they appear on the string/bracelet
-- 🎨 **Hex & RGB Values**: Shows both hexadecimal and RGB color values for each bead
+## 🎮 Game Features
+
+- 🦘 **Kangaroo Rat Character**: Control a kangaroo rat that moves around a grid
+- 🎯 **Bead Sequence Movement**: Follow colored bead sequences (Red - Right, Yellow - Down, Green - Left, Blue - Up, Black - Start of sequence, White - end of sequence)
+- 🌱 **Seed Collection**: Find as many seeds as you can!
+- 🐍 **Snake Avoidance**: If you run into a snake, you'll jump and flip to escape, but scamper back to your home, to continue your sequence.
+- 🎨 **Smart Bead Detection**: Computer vision detects bead colors from a photo taken of the bracelet
 - 📱 **Responsive Design**: Works on desktop and mobile devices
-- 🧠 **Smart Computer Vision**: Uses contour detection and circularity analysis
-- ⚡ **Fast Processing**: Updates bead detection every 500ms
-- 🧪 **Test Mode**: Use static images for testing without camera access
+- 🧪 **Test Mode**: Use static images for testing bead detection and game mechanics without camera access
 
-## Getting Started
+## 🔍 Bead Detection Technology
+
+The game includes sophisticated bead color detection that:
+
+- 📹 **Camera**: Take photo of bracelet for bead analysis
+- 🎯 **Individual Bead Detection**: Finds edges and uses heuristics to identify individual beads around the ring.
+- 🔢 **Ordered Color Sequence**: Extracts colors in the exact order they appear, starting at the black bead and proceeding around the ring to the ending white bead.
+- 🎨 **Hex & RGB Values**: Shows both hexadecimal and RGB color values
+
+## 🎯 How to Play
+
+### 1. **Bead Detection Phase**
+1. **Start Camera**: Click "Start Camera" to activate your device's camera
+2. **Capture Bead Photo**: Take a photo of your bead sequence
+3. **Analyze Beads**: The system automatically detects and orders the beads
+4. **Review Sequence**: Check the detected bead sequence in the text box
+
+### 2. **Game Phase**
+1. **Set Bead Sequence**: Use the detected sequence or manually edit it
+2. **Click "Go"**: Start the kangaroo rat's movement
+3. **Watch Movement**: The rat follows the bead sequence:
+   - 🔴 **Red (R)**: Move Right
+   - 🟡 **Yellow (Y)**: Move Down
+   - 🟢 **Green (G)**: Move Left
+   - 🔵 **Blue (B)**: Move Up
+   - ⚫ **Black (K)**: Signals start of the sequence
+   - ⚪ **White (W)**: Signals end of the sequence
+4. **Collect Seeds**: The kangaroo rat automatically eats seeds along its path
+5. **Reset & Repeat**: Use "Reset Map" to start over and re-run your movement algorithm.
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js (version 16 or higher)
-- A modern web browser with camera access (for live detection)
+- Node.js (version 20 or higher)
+- A modern web browser with camera access (for bead detection)
 - Camera permissions enabled (for live detection)
 
 ### Installation
@@ -30,7 +61,7 @@ A React single-page application that uses your device's camera to detect individ
    npm install
    ```
 
-### Running the Application
+### Running the Game
 
 1. Start the development server:
    ```bash
@@ -39,44 +70,39 @@ A React single-page application that uses your device's camera to detect individ
 
 2. Open your browser and navigate to the URL shown in the terminal (usually `http://localhost:5173`)
 
-3. Click "Start Camera" to begin detection
+3. Start playing by detecting beads and then controlling the kangaroo rat!
 
-## How to Use
+## 🎮 Game Controls
 
-### Live Camera Detection
-1. **Start Camera**: Click the green "Start Camera" button to activate your device's camera
-2. **Point at Beads**: Hold your camera steady and point it at a string or bracelet of beads
-3. **View Results**: The detected beads will appear in order with:
-   - Numbered bead sequence (1, 2, 3, etc.)
-   - Circular color swatches
-   - Hexadecimal values (e.g., #FF5733)
-   - RGB values (e.g., RGB(255, 87, 51))
-   - Summary showing total beads and color sequence
-4. **Stop Camera**: Click the red "Stop Camera" button when finished
+- **Direction Pad**: Shows the current movement direction
+- **Bead Sequence**: Visual representation of the current bead sequence
+- **Reset Map**: Start over with a clean grid
+- **Reset Everything**: Clear all game state and start fresh
 
-### Test Mode with Static Images
+## 🧪 Test Mode
+
 You can test the bead detection with static images without needing camera access:
 
 1. **Add Test Images**: Place your test images in the `public/` directory
 2. **Use Query Parameter**: Add `?test=yourimage.jpg` to the URL
    - Example: `http://localhost:5173?test=testbeads.jpg`
-3. **Start Detection**: Click "Start Detection" to analyze the image
-4. **View Results**: Beads will be detected and displayed in order as with live camera
+3. **Start Detection**: The system automatically analyzes the image
+4. **View Results**: Beads will be detected and displayed in order
 
 **Available Test Images:**
 - `testbeads.jpg` - Sample beads image for testing
 
-## Technical Details
+## 🔧 Technical Details
 
 ### Bead Detection Algorithm
 
-The app uses advanced computer vision techniques:
+The game uses advanced computer vision techniques:
 
 1. **Image Preprocessing**: Converts image to binary mask using brightness thresholds
 2. **Connected Component Analysis**: Finds connected regions of similar pixels
 3. **Circularity Detection**: Analyzes shape properties to identify circular beads
 4. **Color Extraction**: Determines dominant color for each detected bead
-5. **Position Sorting**: Orders beads by their spatial position (left-to-right, top-to-bottom)
+5. **Position Sorting**: Orders beads by their spatial position
 6. **Duplicate Removal**: Eliminates overlapping or duplicate detections
 
 ### Detection Parameters
@@ -87,44 +113,52 @@ The app uses advanced computer vision techniques:
 - **Brightness Range**: 30-220 (excludes very dark/light pixels)
 - **Duplicate Distance**: <30 pixels (removes overlapping detections)
 
-### Browser Compatibility
+### Color Classification
 
-- Chrome/Chromium (recommended)
-- Firefox
-- Safari
-- Edge
+The system intelligently classifies bead colors:
+- **Red (R)**: Hue 325°-30° (with vibrancy/brightness checks)
+- **Yellow (Y)**: Hue 30°-90°
+- **Green (G)**: Hue 85°-185°
+- **Blue (B)**: Hue 185°-325°
+- **Black (K)**: Very low brightness and saturation
+- **White (W)**: High brightness, low saturation (including low-vibrancy "red" beads)
 
-**Note**: Camera access requires HTTPS in production environments.
-
-## Development
-
-### Project Structure
+## 🏗️ Project Structure
 
 ```
 src/
-├── App.jsx          # Main application component
-├── App.css          # Application styles
-├── index.css        # Global styles
-└── main.jsx         # Application entry point
+├── App.jsx              # Main application component with bead detection
+├── App.css              # Application styles
+├── index.css            # Global styles
+├── main.jsx             # Application entry point
+└── components/
+    ├── KRMap.jsx        # Kangaroo rat game map and logic
+    ├── KRMap.css        # Map component styles
+    ├── DirectionPad.jsx # Direction indicator
+    ├── DirectionPad.css # Direction pad styles
+    ├── BeadSequence.jsx # Bead sequence visualization
+    └── BeadSequence.css # Bead sequence styles
 public/
-├── testbeads.jpg    # Sample test image
-└── vite.svg         # Vite logo
+├── testbeads.jpg        # Sample test image
+├── kr.png              # Kangaroo rat character
+├── s1.png-s5.png       # Seed images
+└── vite.svg            # Vite logo
 ```
 
 ### Key Technologies
 
 - **React 18**: UI framework
 - **Vite**: Build tool and development server
+- **OpenCV.js**: Computer vision library for bead detection
 - **Canvas API**: Image processing and analysis
 - **MediaDevices API**: Camera access
-- **Computer Vision**: Contour detection and shape analysis
 - **CSS Grid & Flexbox**: Responsive layout
 
-## Deployment
+## 🌐 Deployment
 
 ### GitHub Pages Deployment
 
-This app is configured for automatic deployment to GitHub Pages.
+This game is configured for automatic deployment to GitHub Pages with custom domain support.
 
 #### Prerequisites
 - GitHub repository with your code
@@ -133,23 +167,14 @@ This app is configured for automatic deployment to GitHub Pages.
 #### Automatic Deployment (Recommended)
 1. Push your code to the `main` branch
 2. GitHub Actions will automatically build and deploy to GitHub Pages
-3. Your app will be available at `https://yourusername.github.io/beads/`
+3. Your game will be available at your configured domain
 
 #### Manual Deployment
 1. Install dependencies: `npm install`
 2. Build the project: `npm run build`
 3. Deploy to GitHub Pages: `npm run deploy`
 
-#### Configuration
-- **Base Path**: Automatically set to `/beads/` for production builds
-- **Build Output**: `dist/` directory
-- **Deployment Branch**: `gh-pages` (automatically created)
-
-### Environment Variables
-- `NODE_ENV`: Automatically set by build process
-- `GITHUB_TOKEN`: Automatically provided by GitHub Actions
-
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Camera Not Working
 - Ensure camera permissions are granted
@@ -165,24 +190,20 @@ This app is configured for automatic deployment to GitHub Pages.
 - Ensure beads are roughly circular in shape
 - Test with the provided sample image first
 
-### Incorrect Bead Order
-- Ensure beads are arranged in a clear sequence
-- Avoid overlapping beads
-- Try different camera angles
-- Check that beads are roughly the same size
+### Game Not Responding
+- Check that a valid bead sequence is entered
+- Ensure the sequence contains valid colors (R, Y, G, B, K, W)
+- Try resetting the game state
 
 ### Performance Issues
 - Close other browser tabs
 - Reduce browser window size
 - Ensure device has sufficient processing power
-- The algorithm processes every 500ms for real-time detection
 
-### Test Mode Issues
-- Ensure the image file exists in the `public/` directory
-- Check that the filename in the URL parameter matches exactly
-- Use common image formats (JPG, PNG, GIF)
-- Ensure test images have clear, separated beads
-
-## License
+## 📄 License
 
 This project is open source and available under the MIT License.
+
+---
+
+**Enjoy playing with your kangaroo rat and discovering bead sequences! 🦘🎮**
